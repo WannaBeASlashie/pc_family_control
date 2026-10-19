@@ -83,6 +83,17 @@ curl -s -X POST $SERVER/api/admin/persons \
 
 ### 4. 日常管理
 
+**家长 Web 控制台（推荐）**：手机/电脑浏览器直接访问 `http://<服务器IP>:8080`，用管理密码登录：
+
+- **总览**：机器在线、谁在上机、待审批数（自动刷新）
+- **账户**：新建/编辑（姓名/PIN/启停/策略）、一键充值（+15m/+30m/+1h）
+- **审批**：孩子锁屏上的加时申请，一键批准/拒绝
+- **策略**：每日额度（工作日/周末分列）、可用时段（多段/跨零点）、单次连续上限
+- **机器**：注册（显示密钥）、远程指令（锁定/解锁/下机/消息/关机/重启）
+- **记录**：最近会话
+
+命令行方式（脚本/自动化）：
+
 ```bash
 # 总览：谁在哪台机上、剩余多少
 curl -s $SERVER/api/admin/overview -H "Authorization: Bearer $TOKEN"
@@ -148,6 +159,15 @@ powershell -ExecutionPolicy Bypass -File scripts\demo-ui.ps1
 | 下机 | 点「下机」结束会话并注销（可配置） |
 | UI 被关 | 管道断开 60s → 自动结束会话（防杀进程白嫖） |
 | 断网 | P0 无法上机（离线额度 P1 实现） |
+
+## 开发者：数据库迁移
+
+数据库已改用 EF Core Migrations（启动时自动 `Migrate()` 并种子默认策略）。修改表结构后：
+
+```bash
+dotnet tool install --global dotnet-ef --version 8.*   # 首次
+dotnet ef migrations add <名称> --project src/server/HomeCtrl.Server
+```
 
 ## 路线图
 

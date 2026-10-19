@@ -9,6 +9,21 @@ public class Person
     public bool Enabled { get; set; } = true;
     public long BalanceSeconds { get; set; }
     public long Points { get; set; }          // 预留：积分（P2 任务/兑换使用）
+    public int PolicyId { get; set; } = 1;    // 策略（时段/每日额度/单次上限）
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>策略（FR-05）：可用时段 + 每日额度（工作日/周末）+ 单次连续上限。</summary>
+public class Policy
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public long WeekdayQuotaSeconds { get; set; }   // 0 = 不限
+    public long WeekendQuotaSeconds { get; set; }   // 0 = 不限
+    public string AllowedWindowsJson { get; set; } = "[{\"start\":\"00:00\",\"end\":\"24:00\"}]";
+    public long MaxSessionSeconds { get; set; }     // 0 = 不限
+    public bool Enabled { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

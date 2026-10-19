@@ -123,6 +123,38 @@ Check "session ended (reason=$($target.endReason))" ($target.status -eq "ended")
 $ledger = Invoke-RestMethod "$Server/api/admin/ledger/$($acct.id)" -Headers $auth
 Check "ledger complete (initial+grant+charge = $($ledger.Count) rows)" ($ledger.Count -ge 3)
 
+Write-Host "`n== 11. Policy: daily quota (60s cap, needs ~65s) =="
+$pol = Invoke-RestMethod -Method Post "$Server/api/admin/policies" -Headers $auth -ContentType "application/json" -Body (@{name="quota-test"; weekdayQuotaMinutes=1; weekendQuotaMinutes=1; maxSessionMinutes=0; enabled=$true; windows=@()} | ConvertTo-Json -Compress)
+Check "policy created (id=$($pol.id))" ([bool]$pol.ok)
+$card2 = "Q$(Get-Random)"
+$acct2 = Invoke-RestMethod -Method Post "$Server/api/admin/persons" -Headers $auth -ContentType "application/json" -Body (@{cardNo=$card2; displayName="QuotaTest"; pin="2222"; initialSeconds=3600; policyId=$pol.id} | ConvertTo-Json -Compress)
+Check "quota person created" ([bool]$acct2.ok)
+$login2 = Invoke-Client "/api/client/login" $mach.id $mach.secret @{cardNo=$card2; pin="2222"}
+Check "login ok, effective balance capped by quota ($($login2.balanceSeconds)s <= 60s)" ($login2.ok -and $login2.balanceSeconds -gt 0 -and $login2.balanceSeconds -le 60)
+Write-Host "  waiting 65s for quota to exhaust..."
+Start-Sleep 65
+$hb = Invoke-Client "/api/client/heartbeat" $mach.id $mach.secret
+Check "effective balance hits 0 (quota)" ($hb.balanceSeconds -eq 0)
+Check "lock issued with daily_quota reason" (@($hb.commands | Where-Object { $_.action -eq "lock" -and $_.payload -match "daily_quota" }).Count -ge 1)
+$hb.commands | ForEach-Object { Invoke-Client "/api/client/command-ack" $mach.id $mach.secret @{commandId=$_.id} | Out-Null }
+$pNow = Invoke-RestMethod "$Server/api/admin/persons" -Headers $auth
+$p2 = $pNow | Where-Object { $_.cardNo -eq $card2 }
+Check "raw balance untouched by quota ($($p2.balanceSeconds)s)" ($p2.balanceSeconds -gt 3500)
+Invoke-Client "/api/client/logout" $mach.id $mach.secret | Out-Null
+$re = Invoke-Client "/api/client/login" $mach.id $mach.secret @{cardNo=$card2; pin="2222"}
+Check "re-login rejected (daily quota)" (-not $re.ok)
+
+Write-Host "`n== 12. Policy: allowed window (closed window) =="
+Invoke-Client "/api/client/logout" $mach.id $mach.secret | Out-Null   # 防御：确保机器无活动会话
+$nowLocal = Get-Date
+$win = @{ start = $nowLocal.AddMinutes(-60).ToString("HH:mm"); end = $nowLocal.AddMinutes(-30).ToString("HH:mm") }
+$pol2 = Invoke-RestMethod -Method Post "$Server/api/admin/policies" -Headers $auth -ContentType "application/json" -Body (@{name="window-test"; weekdayQuotaMinutes=0; weekendQuotaMinutes=0; maxSessionMinutes=0; enabled=$true; windows=@($win)} | ConvertTo-Json -Compress)
+Check "window policy created (id=$($pol2.id))" ([bool]$pol2.ok)
+$card3 = "W$(Get-Random)"
+Invoke-RestMethod -Method Post "$Server/api/admin/persons" -Headers $auth -ContentType "application/json" -Body (@{cardNo=$card3; displayName="WindowTest"; pin="3333"; initialSeconds=600; policyId=$pol2.id} | ConvertTo-Json -Compress) | Out-Null
+$login3 = Invoke-Client "/api/client/login" $mach.id $mach.secret @{cardNo=$card3; pin="3333"}
+Check "login rejected outside window" (-not $login3.ok)
+
 Write-Host "`n================================"
 Write-Host "Result: $pass passed, $fail failed"
 if ($fail -gt 0) { exit 1 }

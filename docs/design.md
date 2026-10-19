@@ -15,6 +15,8 @@
 | D14 | 指令带 TTL（lock/unlock/message 10 分钟，logoff/shutdown/reboot 5 分钟），过期不下发；充值/审批通过时撤销未执行的 lock/logoff |
 | D15 | FR-11a 加时申请最小版：锁屏按钮 → 服务端 requests 表 → 家长 API 审批（批准=加时长+撤销lock/logoff+解锁；拒绝=message 反馈）；Web 体验为 FR-11b（P1） |
 | D16 | Agent 内以信号量串行化心跳/登录/下机/申请/看门狗的服务端交互，防状态交错覆盖 |
+| D17 | 策略引擎（FR-05）：有效余额 = min(账户余额, 每日剩余额度, 单次剩余)；任一 ≤0 或在时段外（宵禁）→ 锁屏+宽限+下机流程；日期/星期按 `Policy:TzOffsetHours`（默认 +8）本地化计算 |
+| D18 | 数据库改为 EF Core Migrations（`Database.Migrate()` + 启动种子默认策略），后续改表用 `dotnet ef migrations add` |
 
 ## 2. 组件模型
 
@@ -143,6 +145,19 @@ CREATE TABLE commands (         -- 下行指令队列
   acked_at TEXT
 );
 
+CREATE TABLE policies (        -- 策略（FR-05）
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  weekday_quota_seconds INTEGER NOT NULL DEFAULT 0,   -- 0=不限
+  weekend_quota_seconds INTEGER NOT NULL DEFAULT 0,   -- 0=不限
+  allowed_windows_json TEXT NOT NULL DEFAULT '[{"start":"00:00","end":"24:00"}]',
+  max_session_seconds INTEGER NOT NULL DEFAULT 0,     -- 单次连续上限，0=不限
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+-- persons.policy_id 关联（无外键约束，应用层保证，默认 1）
+
 CREATE TABLE time_requests (    -- 加时申请（FR-11a）
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   person_id INTEGER NOT NULL,
@@ -229,6 +244,8 @@ CREATE TABLE audit_log (
 | GET | `/api/admin/ledger/{personId}` | 流水 |
 | GET | `/api/admin/requests?status=pending` | 加时申请列表 |
 | POST | `/api/admin/requests/{id}/decide` | `{approve}` 审批（批准=加时长+解锁；拒绝=message 反馈） |
+| GET/POST | `/api/admin/policies` | 策略列表 / 新建（分钟为单位，windows=[{start,end}]） |
+| PUT | `/api/admin/policies/{id}` | 修改策略 |
 | GET/POST | `/api/admin/machines` | 机器列表 / 新建 → 返回 `secret` |
 | POST | `/api/admin/machines/{id}/command` | `{action,text}` 远程指令 |
 | GET | `/api/admin/sessions?limit=` | 会话记录 |

@@ -19,8 +19,24 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
+    // 种子：默认策略（不限额度、全天可用），家长可在控制台调整或新建
+    if (!db.Policies.Any())
+    {
+        db.Policies.Add(new Policy
+        {
+            Name = "默认（不限）",
+            AllowedWindowsJson = "[{\"start\":\"00:00\",\"end\":\"24:00\"}]",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        db.SaveChanges();
+    }
 }
+
+// 家长 Web 控制台（wwwroot/index.html）
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 if ((app.Configuration["Admin:Password"] ?? "changeme") == "changeme")
 {
@@ -97,7 +113,7 @@ static void CancelPending(AppDbContext db, int machineId, params string[] action
 
 // ---------- 健康检查 ----------
 
-app.MapGet("/", () => "HomeCtrl Server");
+app.MapGet("/health", () => "HomeCtrl Server");
 
 // ================= 客户端（受控机）接口 =================
 
@@ -115,18 +131,24 @@ app.MapPost("/api/client/heartbeat", (HttpContext ctx, AppDbContext db) =>
 
     if (session is not null)
     {
-        // 服务端权威计费：按 startedAt 推算增量
+        // 服务端权威计费：按 startedAt 推算增量，并立即落库（下方额度计算需要读到最新计费）
         Billing.Settle(db, session, DateTime.UtcNow);
+        db.SaveChanges();
         sessionInfo = new { id = session.Id, person = session.Person!.DisplayName, startedAt = session.StartedAt };
-        balance = session.Person.BalanceSeconds;
 
-        if (balance <= 0)
+        // 策略叠加：可用时段 / 每日额度 / 单次上限 → 取最小为有效余额
+        var tz = app.Configuration.GetValue("Policy:TzOffsetHours", 8);
+        var (effective, outside, limitReason) = PolicyEngine.Evaluate(db, session.Person!, session, DateTime.UtcNow, tz);
+        balance = Math.Max(effective, 0);
+
+        if (outside || effective <= 0)
         {
             session.ExhaustedAt ??= DateTime.UtcNow;
             if (session.LockSentAt is null)
             {
                 session.LockSentAt = DateTime.UtcNow;
-                db.Commands.Add(NewCmd(machine.Id, "lock", "{\"reason\":\"exhausted\"}", 10));
+                var lockReason = outside ? "curfew" : limitReason ?? "exhausted";
+                db.Commands.Add(NewCmd(machine.Id, "lock", JsonSerializer.Serialize(new { reason = lockReason }), 10));
             }
             var grace = app.Configuration.GetValue("Policy:GraceSeconds", 300);
             if (session.LogoffSentAt is null && DateTime.UtcNow - session.ExhaustedAt > TimeSpan.FromSeconds(grace))
@@ -137,7 +159,7 @@ app.MapPost("/api/client/heartbeat", (HttpContext ctx, AppDbContext db) =>
         }
         else
         {
-            // 余额恢复（充值）→ 重置耗尽标记，下次耗尽重新走 提醒→锁→宽限 流程
+            // 有效余额恢复（充值/额度重算）→ 重置标记，下次耗尽重新走 提醒→锁→宽限 流程
             session.ExhaustedAt = null;
             session.LockSentAt = null;
             session.LogoffSentAt = null;
@@ -189,8 +211,14 @@ app.MapPost("/api/client/login", (LoginReq req, HttpContext ctx, AppDbContext db
 
     if (!person.Enabled)
         return Results.Json(new { ok = false, reason = "账户已停用" });
-    if (person.BalanceSeconds <= 0)
-        return Results.Json(new { ok = false, reason = "余额不足，请联系家长" });
+
+    // 策略检查：可用时段 + 每日额度（含余额判断）
+    var tz = app.Configuration.GetValue("Policy:TzOffsetHours", 8);
+    var (eff, outsideWin, _) = PolicyEngine.Evaluate(db, person, null, DateTime.UtcNow, tz);
+    if (outsideWin)
+        return Results.Json(new { ok = false, reason = "当前不在可用时段" });
+    if (eff <= 0)
+        return Results.Json(new { ok = false, reason = person.BalanceSeconds <= 0 ? "余额不足，请联系家长" : "今日额度已用完，明天再来吧" });
     if (db.Sessions.Any(s => s.PersonId == person.Id && s.Status == SessionStatus.Active))
         return Results.Json(new { ok = false, reason = "该账号正在其他设备上机" });
     if (db.Sessions.Any(s => s.MachineId == machine.Id && s.Status == SessionStatus.Active))
@@ -211,7 +239,7 @@ app.MapPost("/api/client/login", (LoginReq req, HttpContext ctx, AppDbContext db
     });
     db.SaveChanges();
 
-    return Results.Json(new { ok = true, sessionId = session.Id, person = person.DisplayName, balanceSeconds = person.BalanceSeconds });
+    return Results.Json(new { ok = true, sessionId = session.Id, person = person.DisplayName, balanceSeconds = Math.Max(eff, 0) });
 });
 
 app.MapPost("/api/client/logout", (HttpContext ctx, AppDbContext db) =>
@@ -305,16 +333,22 @@ app.MapGet("/api/admin/overview", (HttpContext ctx, AppDbContext db, AdminAuth a
         .Select(s => new { s.Id, person = s.Person!.DisplayName, machine = s.Machine!.Name, s.StartedAt, s.ChargedSeconds })
         .ToList();
     var persons = db.Persons
-        .Select(p => new { p.Id, p.CardNo, p.DisplayName, p.Enabled, p.BalanceSeconds, p.Points })
+        .Select(p => new { p.Id, p.CardNo, p.DisplayName, p.Enabled, p.BalanceSeconds, p.Points, p.PolicyId })
         .ToList();
-    return Results.Json(new { machines, activeSessions = sessions, persons });
+    return Results.Json(new
+    {
+        machines,
+        activeSessions = sessions,
+        persons,
+        pendingRequests = db.TimeRequests.Count(r => r.Status == RequestStatus.Pending)
+    });
 });
 
 app.MapGet("/api/admin/persons", (HttpContext ctx, AppDbContext db, AdminAuth auth) =>
 {
     if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
     var persons = db.Persons
-        .Select(p => new { p.Id, p.CardNo, p.DisplayName, p.Enabled, p.BalanceSeconds, p.Points, p.CreatedAt })
+        .Select(p => new { p.Id, p.CardNo, p.DisplayName, p.Enabled, p.BalanceSeconds, p.Points, p.PolicyId, p.CreatedAt })
         .ToList();
     return Results.Json(persons);
 });
@@ -333,6 +367,7 @@ app.MapPost("/api/admin/persons", (CreatePersonReq req, HttpContext ctx, AppDbCo
         DisplayName = req.DisplayName,
         PinHash = HashPin(req.Pin),
         BalanceSeconds = Math.Max(req.InitialSeconds, 0),
+        PolicyId = req.PolicyId ?? 1,
         CreatedAt = DateTime.UtcNow,
         UpdatedAt = DateTime.UtcNow
     };
@@ -360,6 +395,7 @@ app.MapPut("/api/admin/persons/{id}", (int id, UpdatePersonReq req, HttpContext 
     if (req.DisplayName is not null) person.DisplayName = req.DisplayName;
     if (req.Pin is not null) person.PinHash = HashPin(req.Pin);
     if (req.Enabled is not null) person.Enabled = req.Enabled.Value;
+    if (req.PolicyId is not null) person.PolicyId = req.PolicyId.Value;
     person.UpdatedAt = DateTime.UtcNow;
     db.SaveChanges();
     return Results.Json(new { ok = true });
@@ -484,6 +520,78 @@ app.MapPost("/api/admin/requests/{id}/decide", (int id, DecideReq req, HttpConte
     return Results.Json(new { ok = true });
 });
 
+// ================= 策略管理（FR-05）=================
+
+app.MapGet("/api/admin/policies", (HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var rows = db.Policies.OrderBy(p => p.Id)
+        .Select(p => new
+        {
+            p.Id, p.Name,
+            weekdayQuotaSeconds = p.WeekdayQuotaSeconds,
+            weekendQuotaSeconds = p.WeekendQuotaSeconds,
+            maxSessionSeconds = p.MaxSessionSeconds,
+            p.AllowedWindowsJson, p.Enabled
+        })
+        .ToList();
+    return Results.Json(rows);
+});
+
+app.MapPost("/api/admin/policies", (PolicyReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var err = ValidatePolicy(req);
+    if (err is not null) return Results.Json(new { ok = false, reason = err });
+
+    var p = new Policy
+    {
+        Name = req.Name.Trim(),
+        WeekdayQuotaSeconds = Math.Max(req.WeekdayQuotaMinutes, 0) * 60,
+        WeekendQuotaSeconds = Math.Max(req.WeekendQuotaMinutes, 0) * 60,
+        MaxSessionSeconds = Math.Max(req.MaxSessionMinutes, 0) * 60,
+        AllowedWindowsJson = WindowsJson(req.Windows),
+        Enabled = req.Enabled,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+    db.Policies.Add(p);
+    db.SaveChanges();
+    return Results.Json(new { ok = true, id = p.Id });
+});
+
+app.MapPut("/api/admin/policies/{id}", (int id, PolicyReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var p = db.Policies.Find(id);
+    if (p is null) return Results.NotFound();
+    var err = ValidatePolicy(req);
+    if (err is not null) return Results.Json(new { ok = false, reason = err });
+
+    p.Name = req.Name.Trim();
+    p.WeekdayQuotaSeconds = Math.Max(req.WeekdayQuotaMinutes, 0) * 60;
+    p.WeekendQuotaSeconds = Math.Max(req.WeekendQuotaMinutes, 0) * 60;
+    p.MaxSessionSeconds = Math.Max(req.MaxSessionMinutes, 0) * 60;
+    p.AllowedWindowsJson = WindowsJson(req.Windows);
+    p.Enabled = req.Enabled;
+    p.UpdatedAt = DateTime.UtcNow;
+    db.SaveChanges();
+    return Results.Json(new { ok = true });
+});
+
+static string? ValidatePolicy(PolicyReq req)
+{
+    if (string.IsNullOrWhiteSpace(req.Name)) return "名称不能为空";
+    if (req.Windows is not null)
+        foreach (var w in req.Windows)
+            if (!PolicyEngine.TryParseHm(w.Start, out _) || !PolicyEngine.TryParseHm(w.End, out _))
+                return "时段格式应为 HH:mm";
+    return null;
+}
+
+static string WindowsJson(List<PolicyWindowReq>? windows) =>
+    JsonSerializer.Serialize((windows ?? new List<PolicyWindowReq>()).Select(w => new { start = w.Start, end = w.End }));
+
 app.MapGet("/api/admin/machines", (HttpContext ctx, AppDbContext db, AdminAuth auth) =>
 {
     if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
@@ -557,11 +665,13 @@ app.Run();
 record LoginReq(string CardNo, string Pin);
 record AckReq(int CommandId);
 record AdminLoginReq(string Password);
-record CreatePersonReq(string CardNo, string DisplayName, string Pin, long InitialSeconds);
-record UpdatePersonReq(string? DisplayName, string? Pin, bool? Enabled);
+record CreatePersonReq(string CardNo, string DisplayName, string Pin, long InitialSeconds, int? PolicyId = null);
+record UpdatePersonReq(string? DisplayName, string? Pin, bool? Enabled, int? PolicyId = null);
 record BalanceReq(long DeltaSeconds, string? Note);
 record CreateMachineReq(string Name);
 record CommandReq(string Action, string? Text);
 record RequestTimeReq(int Minutes);
 record DecideReq(bool Approve, string? Note);
+record PolicyReq(string Name, long WeekdayQuotaMinutes, long WeekendQuotaMinutes, List<PolicyWindowReq>? Windows, long MaxSessionMinutes, bool Enabled);
+record PolicyWindowReq(string Start, string End);
 record FailState(int Count, DateTime LockedUntil, DateTime LastFailAt);
