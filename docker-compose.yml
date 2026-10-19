@@ -9,5 +9,6 @@ services:
       - Admin__Password=changeme            # 家长管理密码，务必修改
       - ConnectionStrings__Default=Data Source=/data/homectrl.db
       - Policy__GraceSeconds=300            # 余额耗尽后的宽限期（秒）
+      - Policy__TzOffsetHours=8             # 策略日期/时段的时区偏移（小时，中国=8）
     volumes:
       - ./data:/data

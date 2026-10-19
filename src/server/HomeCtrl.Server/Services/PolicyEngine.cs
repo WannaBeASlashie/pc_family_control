@@ -35,13 +35,14 @@ public static class PolicyEngine
         if (quota > 0)
         {
             var localMidnightUtc = localNow.Date.AddHours(-tzOffsetHours);
-            // 取最近 20 条会话在内存中按本地日期过滤：规避 SQLite DateTime SQL 比较的
+            // 取最近 200 条会话在内存中按本地日期过滤：规避 SQLite DateTime SQL 比较的
             // provider 差异，同时 EF 的 identity resolution 会带回 ChangeTracker 里
-            // 刚 Settle 但尚未保存的当前会话计费
+            // 刚 Settle 但尚未保存的当前会话计费。
+            // 200 条足以覆盖任何正常的一天（防"刷短会话挤掉消费记录"绕过每日额度）。
             var recent = db.Sessions
                 .Where(s => s.PersonId == person.Id)
                 .OrderByDescending(s => s.StartedAt)
-                .Take(20)
+                .Take(200)
                 .ToList();
             var consumed = recent.Where(s => s.StartedAt >= localMidnightUtc).Sum(s => s.ChargedSeconds);
             var dailyRemaining = quota - consumed;
