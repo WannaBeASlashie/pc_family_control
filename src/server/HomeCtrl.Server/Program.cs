@@ -1,0 +1,442 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using HomeCtrl.Server.Data;
+using HomeCtrl.Server.Models;
+using HomeCtrl.Server.Services;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=homectrl.db"));
+builder.Services.AddSingleton<AdminAuth>();
+builder.Services.AddHostedService<SessionReaper>();
+
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
+
+var loginFailures = new ConcurrentDictionary<string, FailState>();
+
+// ---------- 辅助函数 ----------
+
+static string Hmac(string secret, string data) =>
+    Convert.ToHexString(new HMACSHA256(Encoding.UTF8.GetBytes(secret))
+        .ComputeHash(Encoding.UTF8.GetBytes(data)));
+
+static Machine? AuthMachine(HttpContext ctx, AppDbContext db)
+{
+    var idText = ctx.Request.Headers["X-Machine-Id"].ToString();
+    var tsText = ctx.Request.Headers["X-Timestamp"].ToString();
+    var sigText = ctx.Request.Headers["X-Signature"].ToString();
+    if (idText.Length == 0 || tsText.Length == 0 || sigText.Length == 0) return null;
+    if (!int.TryParse(idText, out var id) || !long.TryParse(tsText, out var ts)) return null;
+    if (Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - ts) > 120) return null;
+
+    var machine = db.Machines.FirstOrDefault(m => m.Id == id);
+    if (machine is null) return null;
+
+    var expected = Hmac(machine.Secret, $"{ts}:{ctx.Request.Path}");
+    return string.Equals(expected, sigText, StringComparison.OrdinalIgnoreCase) ? machine : null;
+}
+
+static string HashPin(string pin)
+{
+    var salt = RandomNumberGenerator.GetBytes(16);
+    var hash = Rfc2898DeriveBytes.Pbkdf2(pin, salt, 100_000, HashAlgorithmName.SHA256, 32);
+    return $"{Convert.ToHexString(salt)}:{Convert.ToHexString(hash)}";
+}
+
+static bool VerifyPin(string pin, string stored)
+{
+    var parts = stored.Split(':');
+    if (parts.Length != 2) return false;
+    var salt = Convert.FromHexString(parts[0]);
+    var expected = Convert.FromHexString(parts[1]);
+    var actual = Rfc2898DeriveBytes.Pbkdf2(pin, salt, 100_000, HashAlgorithmName.SHA256, 32);
+    return CryptographicOperations.FixedTimeEquals(actual, expected);
+}
+
+static string? Bearer(HttpContext ctx)
+{
+    var header = ctx.Request.Headers.Authorization.ToString();
+    return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+        ? header["Bearer ".Length..].Trim()
+        : null;
+}
+
+// ---------- 健康检查 ----------
+
+app.MapGet("/", () => "HomeCtrl Server");
+
+// ================= 客户端（受控机）接口 =================
+
+app.MapPost("/api/client/heartbeat", (HttpContext ctx, AppDbContext db) =>
+{
+    var machine = AuthMachine(ctx, db);
+    if (machine is null) return Results.Unauthorized();
+
+    machine.LastSeenAt = DateTime.UtcNow;
+
+    object? sessionInfo = null;
+    var balance = 0L;
+    var session = db.Sessions.Include(s => s.Person)
+        .FirstOrDefault(s => s.MachineId == machine.Id && s.Status == SessionStatus.Active);
+
+    if (session is not null)
+    {
+        // 服务端权威计费：按 startedAt 推算增量
+        Billing.Settle(db, session, DateTime.UtcNow);
+        sessionInfo = new { id = session.Id, person = session.Person!.DisplayName, startedAt = session.StartedAt };
+        balance = session.Person.BalanceSeconds;
+
+        if (balance <= 0)
+        {
+            session.ExhaustedAt ??= DateTime.UtcNow;
+            if (session.LockSentAt is null)
+            {
+                session.LockSentAt = DateTime.UtcNow;
+                db.Commands.Add(new Command
+                {
+                    MachineId = machine.Id, Action = "lock",
+                    Payload = "{\"reason\":\"exhausted\"}", CreatedAt = DateTime.UtcNow
+                });
+            }
+            var grace = app.Configuration.GetValue("Policy:GraceSeconds", 300);
+            if (session.LogoffSentAt is null && DateTime.UtcNow - session.ExhaustedAt > TimeSpan.FromSeconds(grace))
+            {
+                session.LogoffSentAt = DateTime.UtcNow;
+                db.Commands.Add(new Command
+                {
+                    MachineId = machine.Id, Action = "logoff",
+                    Payload = "{\"reason\":\"grace_expired\"}", CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+        else
+        {
+            // 余额恢复（充值）→ 重置耗尽标记，下次耗尽重新走 提醒→锁→宽限 流程
+            session.ExhaustedAt = null;
+            session.LockSentAt = null;
+            session.LogoffSentAt = null;
+        }
+    }
+
+    // Save BEFORE querying pending commands: commands added above (lock/logoff)
+    // must be visible to this heartbeat's response, not the next one.
+    db.SaveChanges();
+
+    var commands = db.Commands
+        .Where(c => c.MachineId == machine.Id && c.Status == CommandStatus.Pending)
+        .Select(c => new { id = c.Id, action = c.Action, payload = c.Payload })
+        .ToList();
+
+    return Results.Json(new { serverTime = DateTime.UtcNow, session = sessionInfo, balanceSeconds = balance, commands });
+});
+
+app.MapPost("/api/client/login", (LoginReq req, HttpContext ctx, AppDbContext db) =>
+{
+    var machine = AuthMachine(ctx, db);
+    if (machine is null) return Results.Unauthorized();
+
+    if (string.IsNullOrWhiteSpace(req.CardNo) || string.IsNullOrWhiteSpace(req.Pin))
+        return Results.Json(new { ok = false, reason = "请输入卡号和 PIN" });
+
+    var st = loginFailures.GetOrAdd(req.CardNo, _ => new FailState(0, DateTime.MinValue));
+    if (DateTime.UtcNow < st.LockedUntil)
+        return Results.Json(new { ok = false, reason = "尝试次数过多，请 1 分钟后再试" });
+
+    var person = db.Persons.FirstOrDefault(p => p.CardNo == req.CardNo);
+    if (person is null || !VerifyPin(req.Pin, person.PinHash))
+    {
+        var count = st.Count + 1;
+        loginFailures[req.CardNo] = new FailState(count, count >= 5 ? DateTime.UtcNow.AddMinutes(1) : DateTime.MinValue);
+        return Results.Json(new { ok = false, reason = "卡号或 PIN 错误" });
+    }
+    loginFailures.TryRemove(req.CardNo, out _);
+
+    if (!person.Enabled)
+        return Results.Json(new { ok = false, reason = "账户已停用" });
+    if (person.BalanceSeconds <= 0)
+        return Results.Json(new { ok = false, reason = "余额不足，请联系家长" });
+    if (db.Sessions.Any(s => s.PersonId == person.Id && s.Status == SessionStatus.Active))
+        return Results.Json(new { ok = false, reason = "该账号正在其他设备上机" });
+    if (db.Sessions.Any(s => s.MachineId == machine.Id && s.Status == SessionStatus.Active))
+        return Results.Json(new { ok = false, reason = "本机已有上机会话" });
+
+    var session = new Session
+    {
+        PersonId = person.Id,
+        MachineId = machine.Id,
+        StartedAt = DateTime.UtcNow,
+        Status = SessionStatus.Active
+    };
+    db.Sessions.Add(session);
+    db.AuditLogs.Add(new AuditLog
+    {
+        Ts = DateTime.UtcNow, Actor = $"machine:{machine.Id}",
+        Action = "login", Detail = $"person:{person.Id} card:{person.CardNo}"
+    });
+    db.SaveChanges();
+
+    return Results.Json(new { ok = true, sessionId = session.Id, person = person.DisplayName, balanceSeconds = person.BalanceSeconds });
+});
+
+app.MapPost("/api/client/logout", (HttpContext ctx, AppDbContext db) =>
+{
+    var machine = AuthMachine(ctx, db);
+    if (machine is null) return Results.Unauthorized();
+
+    var session = db.Sessions.Include(s => s.Person)
+        .FirstOrDefault(s => s.MachineId == machine.Id && s.Status == SessionStatus.Active);
+
+    long charged = 0;
+    if (session is not null)
+    {
+        Billing.Settle(db, session, DateTime.UtcNow);
+        charged = session.ChargedSeconds;
+        Billing.End(db, session, EndReason.Logout);
+        db.SaveChanges();
+    }
+    return Results.Json(new { ok = true, chargedSeconds = charged });
+});
+
+app.MapPost("/api/client/command-ack", (AckReq req, HttpContext ctx, AppDbContext db) =>
+{
+    var machine = AuthMachine(ctx, db);
+    if (machine is null) return Results.Unauthorized();
+
+    var cmd = db.Commands.FirstOrDefault(c => c.Id == req.CommandId && c.MachineId == machine.Id);
+    if (cmd is not null)
+    {
+        cmd.Status = CommandStatus.Ack;
+        cmd.AckedAt = DateTime.UtcNow;
+        db.SaveChanges();
+    }
+    return Results.Json(new { ok = true });
+});
+
+// ================= 管理端接口 =================
+
+app.MapPost("/api/admin/login", (AdminLoginReq req, AdminAuth auth, IConfiguration cfg) =>
+{
+    var pwd = cfg["Admin:Password"] ?? "changeme";
+    if (string.IsNullOrEmpty(req.Password) || req.Password != pwd)
+        return Results.Unauthorized();
+    return Results.Json(new { token = auth.Issue() });
+});
+
+app.MapGet("/api/admin/overview", (HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+
+    var machines = db.Machines.ToList().Select(m => new
+    {
+        m.Id, m.Name, m.LastSeenAt,
+        online = m.LastSeenAt is DateTime seen && (DateTime.UtcNow - seen).TotalSeconds < 30
+    });
+    var sessions = db.Sessions.Include(s => s.Person).Include(s => s.Machine)
+        .Where(s => s.Status == SessionStatus.Active)
+        .Select(s => new { s.Id, person = s.Person!.DisplayName, machine = s.Machine!.Name, s.StartedAt, s.ChargedSeconds })
+        .ToList();
+    var persons = db.Persons
+        .Select(p => new { p.Id, p.CardNo, p.DisplayName, p.Enabled, p.BalanceSeconds, p.Points })
+        .ToList();
+    return Results.Json(new { machines, activeSessions = sessions, persons });
+});
+
+app.MapGet("/api/admin/persons", (HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var persons = db.Persons
+        .Select(p => new { p.Id, p.CardNo, p.DisplayName, p.Enabled, p.BalanceSeconds, p.Points, p.CreatedAt })
+        .ToList();
+    return Results.Json(persons);
+});
+
+app.MapPost("/api/admin/persons", (CreatePersonReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    if (string.IsNullOrWhiteSpace(req.CardNo) || string.IsNullOrWhiteSpace(req.Pin) || string.IsNullOrWhiteSpace(req.DisplayName))
+        return Results.Json(new { ok = false, reason = "卡号、姓名、PIN 均不能为空" });
+    if (db.Persons.Any(p => p.CardNo == req.CardNo))
+        return Results.Json(new { ok = false, reason = "卡号已存在" });
+
+    var person = new Person
+    {
+        CardNo = req.CardNo,
+        DisplayName = req.DisplayName,
+        PinHash = HashPin(req.Pin),
+        BalanceSeconds = Math.Max(req.InitialSeconds, 0),
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+    db.Persons.Add(person);
+    db.SaveChanges();
+
+    if (person.BalanceSeconds > 0)
+    {
+        db.TimeLedger.Add(new TimeLedger
+        {
+            PersonId = person.Id, DeltaSeconds = person.BalanceSeconds,
+            Kind = LedgerKind.Initial, Note = "开户", CreatedAt = DateTime.UtcNow
+        });
+        db.SaveChanges();
+    }
+    return Results.Json(new { ok = true, id = person.Id });
+});
+
+app.MapPut("/api/admin/persons/{id}", (int id, UpdatePersonReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var person = db.Persons.Find(id);
+    if (person is null) return Results.NotFound();
+
+    if (req.DisplayName is not null) person.DisplayName = req.DisplayName;
+    if (req.Pin is not null) person.PinHash = HashPin(req.Pin);
+    if (req.Enabled is not null) person.Enabled = req.Enabled.Value;
+    person.UpdatedAt = DateTime.UtcNow;
+    db.SaveChanges();
+    return Results.Json(new { ok = true });
+});
+
+app.MapDelete("/api/admin/persons/{id}", (int id, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var person = db.Persons.Find(id);
+    if (person is null) return Results.NotFound();
+    if (db.Sessions.Any(s => s.PersonId == id && s.Status == SessionStatus.Active))
+        return Results.Json(new { ok = false, reason = "该账户正在上机，请先强制下机" });
+
+    db.Persons.Remove(person);
+    db.SaveChanges();
+    return Results.Json(new { ok = true });
+});
+
+/// <summary>家长直接充值/扣减时长（秒）。若该账户正因余额耗尽被锁屏，充值后自动下发解锁指令。</summary>
+app.MapPost("/api/admin/persons/{id}/balance", (int id, BalanceReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var person = db.Persons.Find(id);
+    if (person is null) return Results.NotFound();
+    if (req.DeltaSeconds == 0)
+        return Results.Json(new { ok = true, balanceSeconds = person.BalanceSeconds });
+
+    person.BalanceSeconds = Math.Max(person.BalanceSeconds + req.DeltaSeconds, 0);
+    db.TimeLedger.Add(new TimeLedger
+    {
+        PersonId = person.Id,
+        DeltaSeconds = req.DeltaSeconds,
+        Kind = req.DeltaSeconds > 0 ? LedgerKind.ParentGrant : LedgerKind.ParentDeduct,
+        Note = req.Note,
+        CreatedAt = DateTime.UtcNow
+    });
+
+    var session = db.Sessions.FirstOrDefault(s => s.PersonId == person.Id && s.Status == SessionStatus.Active);
+    if (session is not null && person.BalanceSeconds > 0 && session.ExhaustedAt is not null && session.LogoffSentAt is null)
+        db.Commands.Add(new Command
+        {
+            MachineId = session.MachineId, Action = "unlock",
+            Payload = "{\"reason\":\"balance_granted\"}", CreatedAt = DateTime.UtcNow
+        });
+
+    db.SaveChanges();
+    return Results.Json(new { ok = true, balanceSeconds = person.BalanceSeconds });
+});
+
+app.MapGet("/api/admin/ledger/{personId:int}", (int personId, HttpContext ctx, AppDbContext db, AdminAuth auth, int limit = 100) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    limit = Math.Clamp(limit, 1, 500);
+    var rows = db.TimeLedger
+        .Where(l => l.PersonId == personId)
+        .OrderByDescending(l => l.CreatedAt)
+        .Take(limit)
+        .ToList();
+    return Results.Json(rows);
+});
+
+app.MapGet("/api/admin/machines", (HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var machines = db.Machines.Select(m => new { m.Id, m.Name, m.Secret, m.LastSeenAt, m.CreatedAt }).ToList();
+    return Results.Json(machines);
+});
+
+app.MapPost("/api/admin/machines", (CreateMachineReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.Json(new { ok = false, reason = "名称不能为空" });
+    if (db.Machines.Any(m => m.Name == req.Name))
+        return Results.Json(new { ok = false, reason = "名称已存在" });
+
+    var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+    var machine = new Machine { Name = req.Name, Secret = secret, CreatedAt = DateTime.UtcNow };
+    db.Machines.Add(machine);
+    db.SaveChanges();
+    return Results.Json(new { ok = true, id = machine.Id, secret });
+});
+
+app.MapPost("/api/admin/machines/{id}/command", (int id, CommandReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var machine = db.Machines.Find(id);
+    if (machine is null) return Results.NotFound();
+
+    var action = req.Action.Trim().ToLowerInvariant();
+    var valid = new[] { "lock", "unlock", "logoff", "shutdown", "reboot", "message" };
+    if (!valid.Contains(action))
+        return Results.Json(new { ok = false, reason = "未知指令" });
+
+    var payload = action == "message"
+        ? JsonSerializer.Serialize(new { text = req.Text ?? "" })
+        : "{}";
+    db.Commands.Add(new Command { MachineId = id, Action = action, Payload = payload, CreatedAt = DateTime.UtcNow });
+    db.SaveChanges();
+    return Results.Json(new { ok = true });
+});
+
+app.MapGet("/api/admin/sessions", (HttpContext ctx, AppDbContext db, AdminAuth auth, int limit = 100) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    limit = Math.Clamp(limit, 1, 500);
+    var sessions = db.Sessions.Include(s => s.Person).Include(s => s.Machine)
+        .OrderByDescending(s => s.StartedAt)
+        .Take(limit)
+        .Select(s => new
+        {
+            s.Id, person = s.Person!.DisplayName, machine = s.Machine!.Name,
+            s.StartedAt, s.EndedAt, s.ChargedSeconds, s.Status, s.EndReason
+        })
+        .ToList();
+    return Results.Json(sessions);
+});
+
+app.MapGet("/api/admin/audit", (HttpContext ctx, AppDbContext db, AdminAuth auth, int limit = 200) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    limit = Math.Clamp(limit, 1, 1000);
+    var logs = db.AuditLogs.OrderByDescending(a => a.Ts).Take(limit).ToList();
+    return Results.Json(logs);
+});
+
+app.Run();
+
+// ---------- 请求模型 ----------
+
+record LoginReq(string CardNo, string Pin);
+record AckReq(int CommandId);
+record AdminLoginReq(string Password);
+record CreatePersonReq(string CardNo, string DisplayName, string Pin, long InitialSeconds);
+record UpdatePersonReq(string? DisplayName, string? Pin, bool? Enabled);
+record BalanceReq(long DeltaSeconds, string? Note);
+record CreateMachineReq(string Name);
+record CommandReq(string Action, string? Text);
+record FailState(int Count, DateTime LockedUntil);

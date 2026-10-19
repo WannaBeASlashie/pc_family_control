@@ -1,0 +1,13 @@
+services:
+  homectrl:
+    build: ./src/server/HomeCtrl.Server
+    container_name: homectrl
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - Admin__Password=changeme            # 家长管理密码，务必修改
+      - ConnectionStrings__Default=Data Source=/data/homectrl.db
+      - Policy__GraceSeconds=300            # 余额耗尽后的宽限期（秒）
+    volumes:
+      - ./data:/data

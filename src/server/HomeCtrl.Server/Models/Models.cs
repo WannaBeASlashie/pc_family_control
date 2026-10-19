@@ -1,0 +1,109 @@
+namespace HomeCtrl.Server.Models;
+
+public class Person
+{
+    public int Id { get; set; }
+    public string CardNo { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string PinHash { get; set; } = "";
+    public bool Enabled { get; set; } = true;
+    public long BalanceSeconds { get; set; }
+    public long Points { get; set; }          // 预留：积分（P2 任务/兑换使用）
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+public class Machine
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Secret { get; set; } = "";
+    public DateTime? LastSeenAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class Session
+{
+    public int Id { get; set; }
+    public int PersonId { get; set; }
+    public Person? Person { get; set; }
+    public int MachineId { get; set; }
+    public Machine? Machine { get; set; }
+    public DateTime StartedAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    public long ChargedSeconds { get; set; }
+    public DateTime? ExhaustedAt { get; set; }     // 余额耗尽时刻（宽限计时起点）
+    public DateTime? LockSentAt { get; set; }
+    public DateTime? LogoffSentAt { get; set; }
+    public string? EndReason { get; set; }
+    public string Status { get; set; } = SessionStatus.Active;
+}
+
+public class Command
+{
+    public int Id { get; set; }
+    public int MachineId { get; set; }
+    public string Action { get; set; } = "";       // lock|unlock|logoff|shutdown|reboot|message
+    public string Payload { get; set; } = "{}";
+    public string Status { get; set; } = CommandStatus.Pending;
+    public DateTime CreatedAt { get; set; }
+    public DateTime? AckedAt { get; set; }
+}
+
+public class TimeLedger
+{
+    public int Id { get; set; }
+    public int PersonId { get; set; }
+    public long DeltaSeconds { get; set; }
+    public string Kind { get; set; } = "";         // initial|parent_grant|parent_deduct|session_charge
+    public string? Note { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>预留：积分流水（P2 任务/兑换使用）</summary>
+public class PointsLedger
+{
+    public int Id { get; set; }
+    public int PersonId { get; set; }
+    public long Delta { get; set; }
+    public string Kind { get; set; } = "";
+    public string? Note { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class AuditLog
+{
+    public int Id { get; set; }
+    public DateTime Ts { get; set; }
+    public string Actor { get; set; } = "";
+    public string Action { get; set; } = "";
+    public string Detail { get; set; } = "";
+}
+
+public static class SessionStatus
+{
+    public const string Active = "active";
+    public const string Ended = "ended";
+}
+
+public static class CommandStatus
+{
+    public const string Pending = "pending";
+    public const string Ack = "ack";
+}
+
+public static class LedgerKind
+{
+    public const string Initial = "initial";
+    public const string ParentGrant = "parent_grant";
+    public const string ParentDeduct = "parent_deduct";
+    public const string SessionCharge = "session_charge";
+}
+
+public static class EndReason
+{
+    public const string Logout = "logout";
+    public const string Exhausted = "exhausted";
+    public const string Admin = "admin";
+    public const string MachineOff = "machine_off";
+}
