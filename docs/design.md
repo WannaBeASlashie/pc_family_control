@@ -12,6 +12,9 @@
 | D11 | 下机/切换默认注销；做成可配置项 |
 | D12 | P0 不做进程拉活守卫；UI 与服务断开管道 60 秒未恢复 → 自动结束会话（停表 + 锁机），比重启更强的兜底 |
 | D13 | 计费完全在服务端（心跳推算），客户端不参与计时决策，改本机时间无效 |
+| D14 | 指令带 TTL（lock/unlock/message 10 分钟，logoff/shutdown/reboot 5 分钟），过期不下发；充值/审批通过时撤销未执行的 lock/logoff |
+| D15 | FR-11a 加时申请最小版：锁屏按钮 → 服务端 requests 表 → 家长 API 审批（批准=加时长+撤销lock/logoff+解锁；拒绝=message 反馈）；Web 体验为 FR-11b（P1） |
+| D16 | Agent 内以信号量串行化心跳/登录/下机/申请/看门狗的服务端交互，防状态交错覆盖 |
 
 ## 2. 组件模型
 
@@ -134,9 +137,22 @@ CREATE TABLE commands (         -- 下行指令队列
   machine_id INTEGER NOT NULL,
   action TEXT NOT NULL,                       -- lock|unlock|logoff|shutdown|reboot|message
   payload TEXT NOT NULL DEFAULT '{}',
-  status TEXT NOT NULL DEFAULT 'pending',     -- pending|ack
+  status TEXT NOT NULL DEFAULT 'pending',     -- pending|ack|expired|cancelled
   created_at TEXT NOT NULL,
+  expires_at TEXT,                            -- 过期不再下发（D14）
   acked_at TEXT
+);
+
+CREATE TABLE time_requests (    -- 加时申请（FR-11a）
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id INTEGER NOT NULL,
+  machine_id INTEGER NOT NULL,
+  minutes INTEGER NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',     -- pending|approved|rejected
+  created_at TEXT NOT NULL,
+  decided_by TEXT,
+  decided_at TEXT
 );
 
 CREATE TABLE time_ledger (      -- 分钟流水
@@ -187,6 +203,7 @@ CREATE TABLE audit_log (
 | POST | `/api/client/heartbeat` | 心跳：返回会话/余额/待执行指令 |
 | POST | `/api/client/login` | `{cardNo,pin}` 上机 |
 | POST | `/api/client/logout` | 结束本机当前会话 |
+| POST | `/api/client/request` | `{minutes}` 加时申请（FR-11a） |
 | POST | `/api/client/command-ack` | `{commandId}` 指令执行确认 |
 
 心跳响应示例：
@@ -208,8 +225,10 @@ CREATE TABLE audit_log (
 | GET | `/api/admin/overview` | 机器在线状态/活跃会话/所有人余额 |
 | GET/POST | `/api/admin/persons` | 账户列表 / 新建 `{cardNo,displayName,pin,initialSeconds}` |
 | PUT/DELETE | `/api/admin/persons/{id}` | 改名/改PIN/启停；删除（上机中禁删） |
-| POST | `/api/admin/persons/{id}/balance` | `{deltaSeconds,note}` 充值/扣减（锁屏中充值自动解锁） |
+| POST | `/api/admin/persons/{id}/balance` | `{deltaSeconds,note}` 充值/扣减（锁屏中充值自动撤销 lock/logoff 并解锁） |
 | GET | `/api/admin/ledger/{personId}` | 流水 |
+| GET | `/api/admin/requests?status=pending` | 加时申请列表 |
+| POST | `/api/admin/requests/{id}/decide` | `{approve}` 审批（批准=加时长+解锁；拒绝=message 反馈） |
 | GET/POST | `/api/admin/machines` | 机器列表 / 新建 → 返回 `secret` |
 | POST | `/api/admin/machines/{id}/command` | `{action,text}` 远程指令 |
 | GET | `/api/admin/sessions?limit=` | 会话记录 |
@@ -223,6 +242,7 @@ CREATE TABLE audit_log (
 {"id":1,"cmd":"getState"}
 {"id":2,"cmd":"login","cardNo":"001","pin":"1234"}
 {"id":3,"cmd":"logout"}
+{"id":4,"cmd":"requestTime","minutes":15}
 ```
 
 响应（Agent → UI）：`{"id":2,"ok":true,"data":{...}}`
@@ -287,3 +307,5 @@ docker compose up -d --build     # 端口 8080，数据在 ./data/homectrl.db
 3. 断网时无法上机（P0 简化；FR-17 P1 实现离线额度）
 4. `Alt+F4` 关闭锁屏 → 60 秒后会话被终止（可接受；P1 进程守卫）
 5. HTTP 明文 + body 未签名（局域网内）
+6. **锁屏 UI 被结束后不会自动重启**：会话在 60 秒内被看门狗终止（计费不受影响），但桌面上没有锁屏遮罩，直到下次登录。UI 进程守护（Agent 拉活 UI）为 P1。
+7. 测试模式后门：`HOMECTRL_TEST=1` 环境变量启用 ESC 退出，仅供开发调试；标准用户理论上可修改自己的启动快捷方式注入该变量，但其效果与杀进程等价（限制 6 已覆盖），P1 进程守卫上线后此风险一并消除。

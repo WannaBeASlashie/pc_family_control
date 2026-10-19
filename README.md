@@ -100,7 +100,7 @@ curl -s -X POST $SERVER/api/admin/machines/1/command \
 
 ## 验证
 
-服务端跑起来后，用冒烟测试脚本验证完整业务链路（登录→计费→耗尽锁定→充值解锁→下机结算）：
+服务端跑起来后，用冒烟测试脚本验证完整业务链路（登录→计费→耗尽锁定→**申请加时→家长批准/拒绝**→充值→下机结算）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\smoke-test.ps1 -Server http://127.0.0.1:8080
@@ -114,7 +114,29 @@ powershell -ExecutionPolicy Bypass -File scripts\e2e-agent-test.ps1 -Server http
 
 全部 `[PASS]` 即链路正常。
 
+Agent 指令执行测试（lock/unlock/message 指令下发 → Agent 执行 → 状态变化，及 UI 断开看门狗自动下机）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\e2e-agent-commands-test.ps1 -Server http://127.0.0.1:8080
+```
+
 > 测试脚本默认用 `127.0.0.1` 而非 `localhost`：PowerShell 5.1 对 localhost 先试 IPv6 `::1`（约 2 秒延迟），会杀死短超时的请求。
+
+### 本地试跑锁屏 UI（可视化调试）
+
+先启动服务端，然后：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\demo-ui.ps1
+```
+
+脚本会自动：复用/创建测试机器 `DemoPC` 与测试账户（卡号 `001` / PIN `1234` / 余额 15 分钟）→ 启动真实 Agent → 以**测试模式**拉起锁屏 UI。
+
+- 测试模式 = 环境变量 `HOMECTRL_TEST=1`，窗口左上角有黄色 `[TEST MODE]` 提示，**按 ESC 可退出**（锁屏和小组件都支持）
+- 正式安装的客户端不设此变量，锁屏不可关闭
+- 若登录后直接 ESC（没点下机），Agent 看门狗会在约 60 秒后自动结束会话停表
+
+可以体验：输错 PIN 被拒 → 正确登录 → 右上角剩余时间小组件走秒 → 点「下机」回到锁屏。
 
 ## 核心规则
 

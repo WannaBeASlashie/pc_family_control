@@ -179,4 +179,19 @@ public class PipeClient
     {
         await CallAsync("logout");
     }
+
+    public async Task<(bool Ok, string? Reason)> RequestTimeAsync(int minutes)
+    {
+        var r = await CallAsync("requestTime", new Dictionary<string, object?> { ["minutes"] = minutes });
+        if (r is null) return (false, "无法连接本机服务，请稍候再试");
+
+        var root = r.Value;
+        var ok = root.TryGetProperty("data", out var d)
+                 && d.TryGetProperty("ok", out var okEl)
+                 && okEl.ValueKind == JsonValueKind.True;
+        string? reason = null;
+        if (!ok && d.TryGetProperty("reason", out var rEl))
+            reason = rEl.GetString();
+        return (ok, reason);
+    }
 }

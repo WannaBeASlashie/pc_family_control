@@ -43,6 +43,26 @@ public class SessionReaper : BackgroundService
                     Billing.End(db, s, EndReason.MachineOff);
                     _log.LogInformation("reaped session {SessionId} person {PersonId}", s.Id, s.PersonId);
                 }
+
+                // ---- 数据保留清理（防表无限增长）----
+                var now = DateTime.UtcNow;
+
+                // 过期的 pending 指令标记为 expired（心跳已不再下发）
+                var expired = db.Commands
+                    .Where(c => c.Status == CommandStatus.Pending && c.ExpiresAt != null && c.ExpiresAt < now)
+                    .ToList();
+                foreach (var c in expired) c.Status = CommandStatus.Expired;
+
+                // 已完成指令保留 7 天
+                db.Commands.RemoveRange(db.Commands
+                    .Where(c => c.Status != CommandStatus.Pending && c.CreatedAt < now.AddDays(-7)));
+
+                // 审计日志保留 90 天
+                db.AuditLogs.RemoveRange(db.AuditLogs.Where(a => a.Ts < now.AddDays(-90)));
+
+                // 已处理的加时申请保留 90 天
+                db.TimeRequests.RemoveRange(db.TimeRequests
+                    .Where(r => r.Status != RequestStatus.Pending && r.DecidedAt != null && r.DecidedAt < now.AddDays(-90)));
                 db.SaveChanges();
             }
             catch (Exception ex)

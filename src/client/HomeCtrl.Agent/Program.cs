@@ -7,6 +7,7 @@ builder.Services.AddWindowsService(o =>
     o.ServiceName = builder.Configuration["Agent:ServiceName"] ?? "HomeCtrlAgent");
 
 builder.Services.AddSingleton<AgentState>();
+builder.Services.AddSingleton<AgentGate>();
 builder.Services.AddSingleton<ServerApiClient>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 builder.Services.AddHostedService<PipeServerService>();

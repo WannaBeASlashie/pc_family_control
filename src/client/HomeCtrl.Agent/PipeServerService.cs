@@ -11,6 +11,7 @@ namespace HomeCtrl.Agent;
 /// 结构（两个独立循环）：
 ///  - 接受循环：连接断开后【立即】重新监听，不阻塞
 ///  - 看门狗（D12）：会话进行中 && UI 断开超过 60s 未重连 → 自动结束会话停表
+/// 与服务端交互的操作（登录/下机/申请/看门狗）经 AgentGate 与心跳串行化。
 /// </summary>
 public class PipeServerService : BackgroundService
 {
@@ -19,17 +20,19 @@ public class PipeServerService : BackgroundService
 
     private readonly AgentState _state;
     private readonly ServerApiClient _api;
+    private readonly AgentGate _gate;
     private readonly ILogger<PipeServerService> _log;
     private readonly int _watchdogSeconds;
-    private readonly object _gate = new();
+    private readonly object _writeLock = new();
     private StreamWriter? _writer;                      // 当前连接的写入器
     private DateTime? _uiGoneSinceUtc;                  // UI 断开时刻（null=在线或从未连过）
 
-    public PipeServerService(AgentState state, ServerApiClient api,
+    public PipeServerService(AgentState state, ServerApiClient api, AgentGate gate,
         IConfiguration cfg, ILogger<PipeServerService> log)
     {
         _state = state;
         _api = api;
+        _gate = gate;
         _log = log;
         _watchdogSeconds = Math.Clamp(cfg.GetValue("UiWatchdogSeconds", 60), 10, 600);
     }
@@ -52,10 +55,10 @@ public class PipeServerService : BackgroundService
             try
             {
                 await pipe.WaitForConnectionAsync(ct);
-                lock (_gate) _uiGoneSinceUtc = null;    // UI 回来了，看门狗停表
+                lock (_writeLock) _uiGoneSinceUtc = null;    // UI 回来了，看门狗停表
 
                 var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
-                lock (_gate) _writer = writer;
+                lock (_writeLock) _writer = writer;
                 using var reader = new StreamReader(pipe, Encoding.UTF8);
 
                 while (!ct.IsCancellationRequested && pipe.IsConnected)
@@ -75,7 +78,7 @@ public class PipeServerService : BackgroundService
             }
             finally
             {
-                lock (_gate)
+                lock (_writeLock)
                 {
                     _writer = null;
                     _uiGoneSinceUtc ??= DateTime.UtcNow; // 开始计时（若尚未在计时）
@@ -95,7 +98,7 @@ public class PipeServerService : BackgroundService
             catch (OperationCanceledException) { break; }
 
             DateTime? goneSince;
-            lock (_gate) goneSince = _uiGoneSinceUtc;
+            lock (_writeLock) goneSince = _uiGoneSinceUtc;
 
             if (goneSince is DateTime t
                 && DateTime.UtcNow - t > TimeSpan.FromSeconds(_watchdogSeconds)
@@ -103,22 +106,28 @@ public class PipeServerService : BackgroundService
             {
                 try
                 {
-                    await _api.PostAsync("/api/client/logout", new { });
-                    _state.ApplyServerState(null, 0);
+                    await _gate.Sem.WaitAsync(ct);
+                    try
+                    {
+                        await _api.PostAsync("/api/client/logout", new { });
+                        _state.ApplyServerState(null, 0);
+                    }
+                    finally { _gate.Sem.Release(); }
                     _log.LogInformation("UI 断开超过 {Sec}s 且会话活跃，会话已自动结束", _watchdogSeconds);
                 }
+                catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
                     _log.LogWarning(ex, "看门狗结束会话失败（服务器不可达？），稍后重试");
                 }
-                lock (_gate) _uiGoneSinceUtc = DateTime.UtcNow; // 重置计时，下轮再查（会话已结束则不动作）
+                lock (_writeLock) _uiGoneSinceUtc = DateTime.UtcNow; // 重置计时，下轮再查
             }
         }
     }
 
     private void WriteLine(string json)
     {
-        lock (_gate)
+        lock (_writeLock)
         {
             try { _writer?.WriteLine(json); }
             catch (IOException) { }
@@ -148,23 +157,46 @@ public class PipeServerService : BackgroundService
                 {
                     var cardNo = root.TryGetProperty("cardNo", out var c) ? c.GetString() ?? "" : "";
                     var pin = root.TryGetProperty("pin", out var p) ? p.GetString() ?? "" : "";
-                    var resp = await _api.PostAsync<LoginResp>("/api/client/login", new { cardNo, pin });
-                    if (resp is not null && resp.Ok && resp.SessionId is not null)
+                    await _gate.Sem.WaitAsync();
+                    try
                     {
-                        _state.ApplyServerState(
-                            new HeartbeatSession(resp.SessionId.Value, resp.Person ?? "", DateTime.UtcNow),
-                            resp.BalanceSeconds);
-                        _state.AdminLock(false);
-                        return Reply(id, true, new { ok = true, person = resp.Person, balanceSeconds = resp.BalanceSeconds });
+                        var resp = await _api.PostAsync<LoginResp>("/api/client/login", new { cardNo, pin });
+                        if (resp is not null && resp.Ok && resp.SessionId is not null)
+                        {
+                            _state.ApplyServerState(
+                                new HeartbeatSession(resp.SessionId.Value, resp.Person ?? "", DateTime.UtcNow),
+                                resp.BalanceSeconds);
+                            _state.AdminLock(false);
+                            return Reply(id, true, new { ok = true, person = resp.Person, balanceSeconds = resp.BalanceSeconds });
+                        }
+                        return Reply(id, true, new { ok = false, reason = resp?.Reason ?? "服务器无响应" });
                     }
-                    return Reply(id, true, new { ok = false, reason = resp?.Reason ?? "服务器无响应" });
+                    finally { _gate.Sem.Release(); }
                 }
 
                 case "logout":
                 {
-                    var resp = await _api.PostAsync<LogoutResp>("/api/client/logout", new { });
-                    _state.ApplyServerState(null, 0);
-                    return Reply(id, true, new { ok = true, chargedSeconds = resp?.ChargedSeconds ?? 0 });
+                    await _gate.Sem.WaitAsync();
+                    try
+                    {
+                        var resp = await _api.PostAsync<LogoutResp>("/api/client/logout", new { });
+                        _state.ApplyServerState(null, 0);
+                        return Reply(id, true, new { ok = true, chargedSeconds = resp?.ChargedSeconds ?? 0 });
+                    }
+                    finally { _gate.Sem.Release(); }
+                }
+
+                case "requestTime":
+                {
+                    var minutes = root.TryGetProperty("minutes", out var m) && m.ValueKind == JsonValueKind.Number
+                        ? m.GetInt32() : 15;
+                    await _gate.Sem.WaitAsync();
+                    try
+                    {
+                        var resp = await _api.PostAsync<RequestResp>("/api/client/request", new { minutes });
+                        return Reply(id, true, new { ok = resp is not null && resp.Ok, reason = resp?.Reason ?? "服务器无响应" });
+                    }
+                    finally { _gate.Sem.Release(); }
                 }
 
                 default:

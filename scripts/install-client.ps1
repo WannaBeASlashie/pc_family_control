@@ -29,7 +29,16 @@ if ([string]::IsNullOrWhiteSpace($Secret)) {
 
 $repo = Split-Path -Parent $PSScriptRoot
 
-# 1) 发布
+# 1) 停止旧版本（服务/UI 运行时文件被占用，必须先停再发布，否则重装失败）
+Write-Host ">> 停止旧版本 ..."
+Get-Process HomeCtrl.LockScreen -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
+    sc.exe stop $ServiceName | Out-Null
+    sc.exe delete $ServiceName | Out-Null
+    Start-Sleep -Seconds 2
+}
+
+# 2) 发布
 Write-Host ">> 发布 Agent ..."
 dotnet publish (Join-Path $repo "src\client\HomeCtrl.Agent") -c Release -o "$InstallDir\agent"
 if ($LASTEXITCODE -ne 0) { throw "Agent 发布失败（需已安装 .NET 8 SDK）" }
@@ -38,19 +47,14 @@ Write-Host ">> 发布 LockScreen UI ..."
 dotnet publish (Join-Path $repo "src\client\HomeCtrl.LockScreen") -c Release -o "$InstallDir\ui"
 if ($LASTEXITCODE -ne 0) { throw "LockScreen 发布失败" }
 
-# 2) 写配置
+# 3) 写配置
 @{
     Agent            = @{ ServiceName = $ServiceName }
     Server           = @{ BaseUrl = $BaseUrl; MachineId = $MachineId; Secret = $Secret }
     HeartbeatSeconds = 10
 } | ConvertTo-Json -Depth 5 | Set-Content "$InstallDir\agent\appsettings.json" -Encoding UTF8
 
-# 3) 注册 Windows 服务（名称即在此伪装）+ 崩溃自动重启
-if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
-    sc.exe stop $ServiceName | Out-Null
-    sc.exe delete $ServiceName | Out-Null
-    Start-Sleep -Seconds 2
-}
+# 4) 注册 Windows 服务（名称即在此伪装）+ 崩溃自动重启
 sc.exe create $ServiceName binPath= "$InstallDir\agent\HomeCtrl.Agent.exe" start= auto DisplayName= $DisplayName
 sc.exe description $ServiceName $Description
 sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/10000/restart/60000

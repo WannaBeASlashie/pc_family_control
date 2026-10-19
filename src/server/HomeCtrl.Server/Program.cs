@@ -22,6 +22,13 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 }
 
+if ((app.Configuration["Admin:Password"] ?? "changeme") == "changeme")
+{
+    app.Logger.LogWarning("==========================================================");
+    app.Logger.LogWarning(" 管理端密码仍为默认值 changeme，请通过环境变量 Admin__Password 修改！");
+    app.Logger.LogWarning("==========================================================");
+}
+
 var loginFailures = new ConcurrentDictionary<string, FailState>();
 
 // ---------- 辅助函数 ----------
@@ -71,6 +78,23 @@ static string? Bearer(HttpContext ctx)
         : null;
 }
 
+static Command NewCmd(int machineId, string action, string payload, int ttlMinutes) => new()
+{
+    MachineId = machineId,
+    Action = action,
+    Payload = payload,
+    CreatedAt = DateTime.UtcNow,
+    ExpiresAt = DateTime.UtcNow.AddMinutes(ttlMinutes)
+};
+
+static void CancelPending(AppDbContext db, int machineId, params string[] actions)
+{
+    var rows = db.Commands
+        .Where(c => c.MachineId == machineId && c.Status == CommandStatus.Pending && actions.Contains(c.Action))
+        .ToList();
+    foreach (var r in rows) r.Status = CommandStatus.Cancelled;
+}
+
 // ---------- 健康检查 ----------
 
 app.MapGet("/", () => "HomeCtrl Server");
@@ -102,21 +126,13 @@ app.MapPost("/api/client/heartbeat", (HttpContext ctx, AppDbContext db) =>
             if (session.LockSentAt is null)
             {
                 session.LockSentAt = DateTime.UtcNow;
-                db.Commands.Add(new Command
-                {
-                    MachineId = machine.Id, Action = "lock",
-                    Payload = "{\"reason\":\"exhausted\"}", CreatedAt = DateTime.UtcNow
-                });
+                db.Commands.Add(NewCmd(machine.Id, "lock", "{\"reason\":\"exhausted\"}", 10));
             }
             var grace = app.Configuration.GetValue("Policy:GraceSeconds", 300);
             if (session.LogoffSentAt is null && DateTime.UtcNow - session.ExhaustedAt > TimeSpan.FromSeconds(grace))
             {
                 session.LogoffSentAt = DateTime.UtcNow;
-                db.Commands.Add(new Command
-                {
-                    MachineId = machine.Id, Action = "logoff",
-                    Payload = "{\"reason\":\"grace_expired\"}", CreatedAt = DateTime.UtcNow
-                });
+                db.Commands.Add(NewCmd(machine.Id, "logoff", "{\"reason\":\"grace_expired\"}", 5));
             }
         }
         else
@@ -133,7 +149,9 @@ app.MapPost("/api/client/heartbeat", (HttpContext ctx, AppDbContext db) =>
     db.SaveChanges();
 
     var commands = db.Commands
-        .Where(c => c.MachineId == machine.Id && c.Status == CommandStatus.Pending)
+        .Where(c => c.MachineId == machine.Id
+                    && c.Status == CommandStatus.Pending
+                    && (c.ExpiresAt == null || c.ExpiresAt > DateTime.UtcNow))
         .Select(c => new { id = c.Id, action = c.Action, payload = c.Payload })
         .ToList();
 
@@ -148,15 +166,23 @@ app.MapPost("/api/client/login", (LoginReq req, HttpContext ctx, AppDbContext db
     if (string.IsNullOrWhiteSpace(req.CardNo) || string.IsNullOrWhiteSpace(req.Pin))
         return Results.Json(new { ok = false, reason = "请输入卡号和 PIN" });
 
-    var st = loginFailures.GetOrAdd(req.CardNo, _ => new FailState(0, DateTime.MinValue));
+    var st = loginFailures.GetOrAdd(req.CardNo, _ => new FailState(0, DateTime.MinValue, DateTime.MinValue));
     if (DateTime.UtcNow < st.LockedUntil)
         return Results.Json(new { ok = false, reason = "尝试次数过多，请 1 分钟后再试" });
+
+    // 失败计数衰减：10 分钟前的失败不再累计
+    var count = DateTime.UtcNow - st.LastFailAt > TimeSpan.FromMinutes(10) ? 0 : st.Count;
 
     var person = db.Persons.FirstOrDefault(p => p.CardNo == req.CardNo);
     if (person is null || !VerifyPin(req.Pin, person.PinHash))
     {
-        var count = st.Count + 1;
-        loginFailures[req.CardNo] = new FailState(count, count >= 5 ? DateTime.UtcNow.AddMinutes(1) : DateTime.MinValue);
+        count += 1;
+        var lockedUntil = count >= 5 ? DateTime.UtcNow.AddMinutes(1) : DateTime.MinValue;
+        // 触发锁定时清零计数：锁定期满后重新获得完整 5 次机会
+        loginFailures[req.CardNo] = new FailState(
+            lockedUntil > DateTime.MinValue ? 0 : count,
+            lockedUntil,
+            DateTime.UtcNow);
         return Results.Json(new { ok = false, reason = "卡号或 PIN 错误" });
     }
     loginFailures.TryRemove(req.CardNo, out _);
@@ -220,6 +246,39 @@ app.MapPost("/api/client/command-ack", (AckReq req, HttpContext ctx, AppDbContex
         db.SaveChanges();
     }
     return Results.Json(new { ok = true });
+});
+
+// 孩子发起加时申请（FR-11a：锁屏上的「申请加时」按钮走这里）
+app.MapPost("/api/client/request", (RequestTimeReq req, HttpContext ctx, AppDbContext db) =>
+{
+    var machine = AuthMachine(ctx, db);
+    if (machine is null) return Results.Unauthorized();
+
+    var session = db.Sessions.Include(s => s.Person)
+        .FirstOrDefault(s => s.MachineId == machine.Id && s.Status == SessionStatus.Active);
+    if (session is null)
+        return Results.Json(new { ok = false, reason = "当前未在上机" });
+
+    if (db.TimeRequests.Any(r => r.PersonId == session.PersonId && r.Status == RequestStatus.Pending))
+        return Results.Json(new { ok = false, reason = "已有待审批的申请，请耐心等待" });
+
+    var minutes = Math.Clamp(req.Minutes, 5, 120);
+    var request = new TimeRequest
+    {
+        PersonId = session.PersonId,
+        MachineId = machine.Id,
+        Minutes = minutes,
+        Status = RequestStatus.Pending,
+        CreatedAt = DateTime.UtcNow
+    };
+    db.TimeRequests.Add(request);
+    db.AuditLogs.Add(new AuditLog
+    {
+        Ts = DateTime.UtcNow, Actor = $"person:{session.PersonId}",
+        Action = "time_request", Detail = $"machine:{machine.Id} +{minutes}min"
+    });
+    db.SaveChanges();
+    return Results.Json(new { ok = true, requestId = request.Id, minutes });
 });
 
 // ================= 管理端接口 =================
@@ -340,11 +399,11 @@ app.MapPost("/api/admin/persons/{id}/balance", (int id, BalanceReq req, HttpCont
 
     var session = db.Sessions.FirstOrDefault(s => s.PersonId == person.Id && s.Status == SessionStatus.Active);
     if (session is not null && person.BalanceSeconds > 0 && session.ExhaustedAt is not null && session.LogoffSentAt is null)
-        db.Commands.Add(new Command
-        {
-            MachineId = session.MachineId, Action = "unlock",
-            Payload = "{\"reason\":\"balance_granted\"}", CreatedAt = DateTime.UtcNow
-        });
+    {
+        // 撤销未执行的 lock/logoff（防止充值后仍被注销），并下发解锁
+        CancelPending(db, session.MachineId, "lock", "logoff");
+        db.Commands.Add(NewCmd(session.MachineId, "unlock", "{\"reason\":\"balance_granted\"}", 10));
+    }
 
     db.SaveChanges();
     return Results.Json(new { ok = true, balanceSeconds = person.BalanceSeconds });
@@ -360,6 +419,69 @@ app.MapGet("/api/admin/ledger/{personId:int}", (int personId, HttpContext ctx, A
         .Take(limit)
         .ToList();
     return Results.Json(rows);
+});
+
+app.MapGet("/api/admin/requests", (HttpContext ctx, AppDbContext db, AdminAuth auth, string? status, int limit = 50) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    limit = Math.Clamp(limit, 1, 200);
+    var query = db.TimeRequests.Include(r => r.Person).AsQueryable();
+    if (!string.IsNullOrEmpty(status))
+        query = query.Where(r => r.Status == status);
+    var rows = query.OrderByDescending(r => r.CreatedAt).Take(limit)
+        .Select(r => new
+        {
+            r.Id, person = r.Person!.DisplayName, personId = r.PersonId, r.MachineId,
+            r.Minutes, r.Reason, r.Status, r.CreatedAt, r.DecidedAt
+        })
+        .ToList();
+    return Results.Json(rows);
+});
+
+// 家长审批：通过 → 加时长 + 撤销 lock/logoff + 解锁；拒绝 → 给孩子回消息
+app.MapPost("/api/admin/requests/{id}/decide", (int id, DecideReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+{
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var request = db.TimeRequests.Include(r => r.Person).FirstOrDefault(r => r.Id == id);
+    if (request is null) return Results.NotFound();
+    if (request.Status != RequestStatus.Pending)
+        return Results.Json(new { ok = false, reason = "该申请已处理" });
+
+    if (req.Approve)
+    {
+        var delta = request.Minutes * 60L;
+        request.Person!.BalanceSeconds += delta;
+        db.TimeLedger.Add(new TimeLedger
+        {
+            PersonId = request.PersonId, DeltaSeconds = delta,
+            Kind = LedgerKind.ParentGrant, Note = $"request:{request.Id} approved",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        var session = db.Sessions.FirstOrDefault(s => s.PersonId == request.PersonId && s.Status == SessionStatus.Active);
+        if (session is not null)
+        {
+            CancelPending(db, session.MachineId, "lock", "logoff");
+            if (request.Person.BalanceSeconds > 0 && session.ExhaustedAt is not null)
+                db.Commands.Add(NewCmd(session.MachineId, "unlock", "{\"reason\":\"request_approved\"}", 10));
+        }
+    }
+    else
+    {
+        db.Commands.Add(NewCmd(request.MachineId, "message",
+            JsonSerializer.Serialize(new { text = $"加时申请未通过（{request.Minutes} 分钟）" }), 10));
+    }
+
+    request.Status = req.Approve ? RequestStatus.Approved : RequestStatus.Rejected;
+    request.DecidedBy = "admin";
+    request.DecidedAt = DateTime.UtcNow;
+    db.AuditLogs.Add(new AuditLog
+    {
+        Ts = DateTime.UtcNow, Actor = "admin", Action = "request_decide",
+        Detail = $"request:{request.Id} {(req.Approve ? "approved" : "rejected")}"
+    });
+    db.SaveChanges();
+    return Results.Json(new { ok = true });
 });
 
 app.MapGet("/api/admin/machines", (HttpContext ctx, AppDbContext db, AdminAuth auth) =>
@@ -398,7 +520,8 @@ app.MapPost("/api/admin/machines/{id}/command", (int id, CommandReq req, HttpCon
     var payload = action == "message"
         ? JsonSerializer.Serialize(new { text = req.Text ?? "" })
         : "{}";
-    db.Commands.Add(new Command { MachineId = id, Action = action, Payload = payload, CreatedAt = DateTime.UtcNow });
+    var ttl = action is "lock" or "unlock" or "message" ? 10 : 5;
+    db.Commands.Add(NewCmd(id, action, payload, ttl));
     db.SaveChanges();
     return Results.Json(new { ok = true });
 });
@@ -439,4 +562,6 @@ record UpdatePersonReq(string? DisplayName, string? Pin, bool? Enabled);
 record BalanceReq(long DeltaSeconds, string? Note);
 record CreateMachineReq(string Name);
 record CommandReq(string Action, string? Text);
-record FailState(int Count, DateTime LockedUntil);
+record RequestTimeReq(int Minutes);
+record DecideReq(bool Approve, string? Note);
+record FailState(int Count, DateTime LockedUntil, DateTime LastFailAt);

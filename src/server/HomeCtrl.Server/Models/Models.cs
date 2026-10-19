@@ -47,7 +47,23 @@ public class Command
     public string Payload { get; set; } = "{}";
     public string Status { get; set; } = CommandStatus.Pending;
     public DateTime CreatedAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }       // 过期不再下发，防止隔天执行旧指令
     public DateTime? AckedAt { get; set; }
+}
+
+/// <summary>加时申请（FR-11a）：孩子发起，家长审批。</summary>
+public class TimeRequest
+{
+    public int Id { get; set; }
+    public int PersonId { get; set; }
+    public Person? Person { get; set; }
+    public int MachineId { get; set; }
+    public int Minutes { get; set; }
+    public string? Reason { get; set; }
+    public string Status { get; set; } = RequestStatus.Pending;
+    public DateTime CreatedAt { get; set; }
+    public string? DecidedBy { get; set; }
+    public DateTime? DecidedAt { get; set; }
 }
 
 public class TimeLedger
@@ -90,6 +106,15 @@ public static class CommandStatus
 {
     public const string Pending = "pending";
     public const string Ack = "ack";
+    public const string Expired = "expired";
+    public const string Cancelled = "cancelled";
+}
+
+public static class RequestStatus
+{
+    public const string Pending = "pending";
+    public const string Approved = "approved";
+    public const string Rejected = "rejected";
 }
 
 public static class LedgerKind

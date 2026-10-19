@@ -10,13 +10,15 @@ public class HeartbeatWorker : BackgroundService
 
     private readonly ServerApiClient _api;
     private readonly AgentState _state;
+    private readonly AgentGate _gate;
     private readonly ILogger<HeartbeatWorker> _log;
     private readonly int _intervalSeconds;
 
-    public HeartbeatWorker(ServerApiClient api, AgentState state, IConfiguration cfg, ILogger<HeartbeatWorker> log)
+    public HeartbeatWorker(ServerApiClient api, AgentState state, AgentGate gate, IConfiguration cfg, ILogger<HeartbeatWorker> log)
     {
         _api = api;
         _state = state;
+        _gate = gate;
         _log = log;
         _intervalSeconds = Math.Clamp(cfg.GetValue("HeartbeatSeconds", 10), 5, 60);
     }
@@ -27,32 +29,45 @@ public class HeartbeatWorker : BackgroundService
         {
             try
             {
-                var resp = await _api.PostAsync<HeartbeatResp>("/api/client/heartbeat", new { });
-                if (resp is not null)
+                // 与登录/下机/看门狗串行化，防止旧会话状态覆盖新登录
+                await _gate.Sem.WaitAsync(stoppingToken);
+                try
                 {
-                    _state.SetOnline(true);
-                    _state.ApplyServerState(resp.Session, resp.BalanceSeconds);
-
-                    foreach (var cmd in resp.Commands ?? new List<HeartbeatCommand>())
+                    var resp = await _api.PostAsync<HeartbeatResp>("/api/client/heartbeat", new { });
+                    if (resp is not null)
                     {
-                        try
+                        _state.SetOnline(true);
+                        _state.ApplyServerState(resp.Session, resp.BalanceSeconds);
+
+                        foreach (var cmd in resp.Commands ?? new List<HeartbeatCommand>())
                         {
-                            await ExecuteCommandAsync(cmd);
-                        }
-                        catch (Exception ex)
-                        {
-                            _log.LogError(ex, "执行指令 {Action} 失败", cmd.Action);
-                        }
-                        try
-                        {
-                            await _api.PostAsync("/api/client/command-ack", new { commandId = cmd.Id });
-                        }
-                        catch (Exception ex)
-                        {
-                            _log.LogWarning(ex, "指令 {Id} 确认失败", cmd.Id);
+                            try
+                            {
+                                await ExecuteCommandAsync(cmd);
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.LogError(ex, "执行指令 {Action} 失败", cmd.Action);
+                            }
+                            try
+                            {
+                                await _api.PostAsync("/api/client/command-ack", new { commandId = cmd.Id });
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.LogWarning(ex, "指令 {Id} 确认失败", cmd.Id);
+                            }
                         }
                     }
                 }
+                finally
+                {
+                    _gate.Sem.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
             }
             catch (Exception ex)
             {

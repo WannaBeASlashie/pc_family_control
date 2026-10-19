@@ -22,3 +22,5 @@ public record HeartbeatResp(
 public record LoginResp(bool Ok, string? Reason, int? SessionId, string? Person, long BalanceSeconds);
 
 public record LogoutResp(bool Ok, long ChargedSeconds);
+
+public record RequestResp(bool Ok, string? Reason, int? RequestId);

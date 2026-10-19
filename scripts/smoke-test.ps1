@@ -83,11 +83,33 @@ Check "balance zero" ($hb.balanceSeconds -eq 0)
 Check "lock command issued" (@($hb.commands | Where-Object action -eq "lock").Count -ge 1)
 $hb.commands | ForEach-Object { Invoke-Client "/api/client/command-ack" $mach.id $mach.secret @{commandId=$_.id} | Out-Null }
 
-Write-Host "`n== 8. Parent recharge -> unlock command =="
+Write-Host "`n== 7b. Time request -> parent approves =="
+$req = Invoke-Client "/api/client/request" $mach.id $mach.secret @{minutes=15}
+Check "request accepted (+$($req.minutes) min)" ([bool]$req.ok)
+$pending = Invoke-RestMethod "$Server/api/admin/requests?status=pending" -Headers $auth
+$target2 = $pending | Where-Object { $_.person -eq "SmokeTest" } | Select-Object -First 1
+Check "request listed (id=$($target2.id))" ($null -ne $target2)
+Invoke-RestMethod -Method Post "$Server/api/admin/requests/$($target2.id)/decide" -Headers $auth -ContentType "application/json" -Body (@{approve=$true} | ConvertTo-Json -Compress) | Out-Null
+$hb = Invoke-Client "/api/client/heartbeat" $mach.id $mach.secret
+Check "balance granted ($($hb.balanceSeconds)s)" ($hb.balanceSeconds -ge 880)
+Check "unlock command issued" (@($hb.commands | Where-Object action -eq "unlock").Count -ge 1)
+$hb.commands | ForEach-Object { Invoke-Client "/api/client/command-ack" $mach.id $mach.secret @{commandId=$_.id} | Out-Null }
+
+Write-Host "`n== 7c. Time request -> parent rejects (message feedback) =="
+$req2 = Invoke-Client "/api/client/request" $mach.id $mach.secret @{minutes=15}
+Check "second request accepted" ([bool]$req2.ok)
+$pending2 = Invoke-RestMethod "$Server/api/admin/requests?status=pending" -Headers $auth
+$target3 = $pending2 | Where-Object { $_.person -eq "SmokeTest" } | Select-Object -First 1
+Invoke-RestMethod -Method Post "$Server/api/admin/requests/$($target3.id)/decide" -Headers $auth -ContentType "application/json" -Body (@{approve=$false} | ConvertTo-Json -Compress) | Out-Null
+$hb = Invoke-Client "/api/client/heartbeat" $mach.id $mach.secret
+Check "reject sends message command" (@($hb.commands | Where-Object action -eq "message").Count -ge 1)
+$hb.commands | ForEach-Object { Invoke-Client "/api/client/command-ack" $mach.id $mach.secret @{commandId=$_.id} | Out-Null }
+
+Write-Host "`n== 8. Parent recharge (session already unlocked after 7b - no unlock command needed) =="
 Invoke-RestMethod -Method Post "$Server/api/admin/persons/$($acct.id)/balance" -Headers $auth -ContentType "application/json" -Body (@{deltaSeconds=600; note="smoke"} | ConvertTo-Json -Compress) | Out-Null
 $hb = Invoke-Client "/api/client/heartbeat" $mach.id $mach.secret
-Check "recharged (balance $($hb.balanceSeconds)s)" ($hb.balanceSeconds -ge 590)
-Check "unlock command issued" (@($hb.commands | Where-Object action -eq "unlock").Count -ge 1)
+Check "recharged (balance $($hb.balanceSeconds)s)" ($hb.balanceSeconds -ge 1480)
+Check "no unlock command (session not locked)" (@($hb.commands | Where-Object action -eq "unlock").Count -eq 0)
 $hb.commands | ForEach-Object { Invoke-Client "/api/client/command-ack" $mach.id $mach.secret @{commandId=$_.id} | Out-Null }
 
 Write-Host "`n== 9. Logout settle =="
