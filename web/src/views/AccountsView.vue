@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { api } from '@/api/client'
@@ -8,6 +9,7 @@ import type { Person, Policy } from '@/api/types'
 import { fmtSec } from '@/utils/format'
 
 const route = useRoute()
+const { t } = useI18n()
 const persons = ref<Person[]>([])
 const policies = ref<Policy[]>([])
 const showNew = ref(false)
@@ -33,10 +35,10 @@ async function grant(id: number, delta: number): Promise<void> {
       deltaSeconds: delta,
       note: 'console'
     })
-    if (r.ok) ElMessage.success(`Updated, balance ${fmtSec(r.balanceSeconds ?? 0)}`)
-    else ElMessage.warning(r.reason || 'Failed')
+    if (r.ok) ElMessage.success(t('accounts.updated', { balance: fmtSec(r.balanceSeconds ?? 0) }))
+    else ElMessage.warning(r.reason || t('common.failed'))
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : 'Failed')
+    ElMessage.error(e instanceof Error ? e.message : t('common.failed'))
   }
   await load()
 }
@@ -59,11 +61,11 @@ async function save(): Promise<void> {
     await api.put(`persons/${editing.value.id}`, body)
     if (form.value.delta !== 0)
       await api.post(`persons/${editing.value.id}/balance`, { deltaSeconds: form.value.delta * 60, note: 'console' })
-    ElMessage.success('Saved')
+    ElMessage.success(t('accounts.saved'))
     editing.value = null
     await load()
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : 'Failed')
+    ElMessage.error(e instanceof Error ? e.message : t('common.failed'))
   } finally {
     saving.value = false
   }
@@ -79,12 +81,12 @@ async function create(): Promise<void> {
       initialSeconds: (newForm.value.init || 0) * 60,
       policyId: newForm.value.policyId
     })
-    ElMessage.success('Created')
+    ElMessage.success(t('accounts.created'))
     showNew.value = false
     newForm.value = { cardNo: '', name: '', pin: '', init: 60, policyId: policies.value[0]?.id ?? 1 }
     await load()
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : 'Failed')
+    ElMessage.error(e instanceof Error ? e.message : t('common.failed'))
   } finally {
     saving.value = false
   }
@@ -92,14 +94,14 @@ async function create(): Promise<void> {
 
 async function remove(p: Person): Promise<void> {
   try {
-    await ElMessageBox.confirm(`Delete account "${p.displayName}" (${p.cardNo})?`, 'Delete account', {
-      type: 'warning',
-      confirmButtonText: 'Delete',
-      cancelButtonText: 'Cancel'
-    })
+    await ElMessageBox.confirm(
+      t('accounts.deleteConfirm', { name: p.displayName, card: p.cardNo }),
+      t('accounts.deleteTitle'),
+      { type: 'warning', confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel') }
+    )
     const r = await api.del<{ ok: boolean; reason?: string }>(`persons/${p.id}`)
-    if (r.ok) ElMessage.success('Deleted')
-    else ElMessage.warning(r.reason || 'Failed')
+    if (r.ok) ElMessage.success(t('accounts.deleted'))
+    else ElMessage.warning(r.reason || t('common.failed'))
   } catch {
     /* cancelled */
   }
@@ -115,92 +117,99 @@ onMounted(async () => {
 <template>
   <el-card v-if="showNew" class="wb-card" style="margin-bottom: 16px">
     <template #header>
-      <div class="card-head"><span>New account</span></div>
+      <div class="card-head"><span>{{ t('accounts.newTitle') }}</span></div>
     </template>
     <el-form label-position="top">
       <el-row :gutter="16">
-        <el-col :xs="24" :sm="12" :md="4"><el-form-item label="Card no."><el-input v-model="newForm.cardNo" /></el-form-item></el-col>
-        <el-col :xs="24" :sm="12" :md="4"><el-form-item label="Name"><el-input v-model="newForm.name" /></el-form-item></el-col>
-        <el-col :xs="24" :sm="12" :md="3"><el-form-item label="PIN"><el-input v-model="newForm.pin" maxlength="8" /></el-form-item></el-col>
-        <el-col :xs="24" :sm="12" :md="3"><el-form-item label="Initial (min)"><el-input-number v-model="newForm.init" :min="0" controls-position="right" style="width: 100%" /></el-form-item></el-col>
+        <el-col :xs="24" :sm="12" :md="4"><el-form-item :label="t('accounts.cardNo')"><el-input v-model="newForm.cardNo" /></el-form-item></el-col>
+        <el-col :xs="24" :sm="12" :md="4"><el-form-item :label="t('common.name')"><el-input v-model="newForm.name" /></el-form-item></el-col>
+        <el-col :xs="24" :sm="12" :md="3"><el-form-item :label="t('accounts.pin')"><el-input v-model="newForm.pin" maxlength="8" /></el-form-item></el-col>
+        <el-col :xs="24" :sm="12" :md="3">
+          <el-form-item :label="t('accounts.initial')">
+            <el-input-number v-model="newForm.init" :min="0" controls-position="right" style="width: 100%" />
+          </el-form-item>
+        </el-col>
         <el-col :xs="24" :sm="12" :md="4">
-          <el-form-item label="Policy">
+          <el-form-item :label="t('common.policy')">
             <el-select v-model="newForm.policyId" style="width: 100%">
               <el-option v-for="p in policies" :key="p.id" :label="p.name" :value="p.id" />
             </el-select>
           </el-form-item>
         </el-col>
       </el-row>
-      <el-button type="primary" :loading="saving" @click="create">Create</el-button>
-      <el-button @click="showNew = false">Cancel</el-button>
+      <el-button type="primary" :loading="saving" @click="create">{{ t('common.create') }}</el-button>
+      <el-button @click="showNew = false">{{ t('common.cancel') }}</el-button>
     </el-form>
   </el-card>
 
   <el-card v-if="editing" class="wb-card" style="margin-bottom: 16px">
     <template #header>
-      <div class="card-head"><span>Edit account <span class="muted">({{ editing.cardNo }})</span></span></div>
+      <div class="card-head"><span>{{ t('accounts.editTitle') }} <span class="muted">({{ editing.cardNo }})</span></span></div>
     </template>
     <el-form label-position="top">
       <el-row :gutter="16">
-        <el-col :xs="24" :sm="12" :md="4"><el-form-item label="Name"><el-input v-model="form.name" /></el-form-item></el-col>
-        <el-col :xs="24" :sm="12" :md="4"><el-form-item label="PIN (blank = unchanged)"><el-input v-model="form.pin" /></el-form-item></el-col>
+        <el-col :xs="24" :sm="12" :md="4"><el-form-item :label="t('common.name')"><el-input v-model="form.name" /></el-form-item></el-col>
+        <el-col :xs="24" :sm="12" :md="4"><el-form-item :label="t('accounts.pinUnchanged')"><el-input v-model="form.pin" /></el-form-item></el-col>
         <el-col :xs="24" :sm="12" :md="3">
-          <el-form-item label="Status">
+          <el-form-item :label="t('common.status')">
             <el-select v-model="form.enabled" style="width: 100%">
-              <el-option label="Enabled" value="true" /><el-option label="Disabled" value="false" />
+              <el-option :label="t('common.enabled')" value="true" />
+              <el-option :label="t('common.disabled')" value="false" />
             </el-select>
           </el-form-item>
         </el-col>
         <el-col :xs="24" :sm="12" :md="4">
-          <el-form-item label="Policy">
+          <el-form-item :label="t('common.policy')">
             <el-select v-model="form.policyId" style="width: 100%">
               <el-option v-for="p in policies" :key="p.id" :label="p.name" :value="p.id" />
             </el-select>
           </el-form-item>
         </el-col>
         <el-col :xs="24" :sm="12" :md="4">
-          <el-form-item label="Adjust balance (min)">
+          <el-form-item :label="t('accounts.adjustBalance')">
             <el-input-number v-model="form.delta" :step="15" controls-position="right" style="width: 100%" />
           </el-form-item>
         </el-col>
       </el-row>
-      <el-button type="primary" :loading="saving" @click="save">Save</el-button>
-      <el-button @click="editing = null">Cancel</el-button>
+      <el-button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</el-button>
+      <el-button @click="editing = null">{{ t('common.cancel') }}</el-button>
     </el-form>
   </el-card>
 
   <div style="margin-bottom: 16px">
-    <el-button type="primary" :icon="Plus" @click="showNew = true">New account</el-button>
+    <el-button type="primary" :icon="Plus" @click="showNew = true">{{ t('accounts.newButton') }}</el-button>
   </div>
 
   <el-card class="wb-card">
     <el-table :data="persons" style="width: 100%">
-      <el-table-column prop="cardNo" label="Card" width="110" />
-      <el-table-column prop="displayName" label="Name" min-width="120" show-overflow-tooltip />
-      <el-table-column label="Balance" width="110">
+      <el-table-column :label="t('accounts.card')" prop="cardNo" width="110" />
+      <el-table-column :label="t('common.name')" prop="displayName" min-width="120" show-overflow-tooltip />
+      <el-table-column :label="t('accounts.balance')" width="110">
         <template #default="{ row }"><span class="mono">{{ fmtSec(row.balanceSeconds) }}</span></template>
       </el-table-column>
-      <el-table-column label="Policy" min-width="120" show-overflow-tooltip>
+      <el-table-column :label="t('common.policy')" min-width="120" show-overflow-tooltip>
         <template #default="{ row }"><span class="muted">{{ policyName(row.policyId) }}</span></template>
       </el-table-column>
-      <el-table-column label="Status" width="100">
+      <el-table-column :label="t('common.status')" width="100">
         <template #default="{ row }">
-          <el-tag :type="row.enabled ? 'success' : 'info'" size="small" effect="light">{{ row.enabled ? 'Enabled' : 'Disabled' }}</el-tag>
+          <el-tag :type="row.enabled ? 'success' : 'info'" size="small" effect="light">
+            {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="Actions" width="330">
+      <el-table-column :label="t('common.actions')" width="360">
         <template #default="{ row }">
           <div class="row-actions">
-            <el-button size="small" @click="grant(row.id, 900)">+15m</el-button>
-            <el-button size="small" @click="grant(row.id, 1800)">+30m</el-button>
-            <el-button size="small" @click="grant(row.id, 3600)">+1h</el-button>
-            <el-button size="small" type="danger" plain @click="grant(row.id, -900)">-15m</el-button>
-            <el-button size="small" type="primary" plain @click="edit(row)">Edit</el-button>
-            <el-button size="small" type="danger" text @click="remove(row)">Delete</el-button>
+            <el-button size="small" @click="grant(row.id, 900)">{{ t('common.plusMin', { n: 15 }) }}</el-button>
+            <el-button size="small" @click="grant(row.id, 1800)">{{ t('common.plusMin', { n: 30 }) }}</el-button>
+            <el-button size="small" @click="grant(row.id, 3600)">{{ t('common.plusMin', { n: 60 }) }}</el-button>
+            <el-button size="small" type="danger" plain @click="grant(row.id, -900)">{{ t('common.minusMin', { n: 15 }) }}</el-button>
+            <el-button size="small" type="primary" plain @click="edit(row)">{{ t('common.edit') }}</el-button>
+            <el-button size="small" type="danger" text @click="remove(row)">{{ t('common.delete') }}</el-button>
           </div>
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="!persons.length" description="No accounts yet" :image-size="60" />
+    <el-empty v-if="!persons.length" :description="t('accounts.noAccounts')" :image-size="60" />
   </el-card>
 </template>

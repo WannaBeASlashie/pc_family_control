@@ -1,16 +1,20 @@
+import { i18n, currentLocale } from '@/i18n'
+
 export type TagType = 'success' | 'danger' | 'warning' | 'primary' | 'info'
 
 export function fmtSec(seconds: number | null | undefined): string {
+  const t = i18n.global.t
   if (seconds === null || seconds === undefined) return '-'
   const s = Math.max(0, Math.floor(seconds))
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
-  return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`
+  return h > 0 ? t('common.durationHM', { h, m }) : t('common.durationMS', { m, s: s % 60 })
 }
 
 export function fmtTime(iso: string | null | undefined): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('en-GB', {
+  const locale = currentLocale() === 'zh-CN' ? 'zh-CN' : 'en-GB'
+  return new Date(iso).toLocaleString(locale, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',

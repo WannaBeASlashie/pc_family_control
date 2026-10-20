@@ -12,13 +12,13 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/overview' },
-    { path: '/overview', component: OverviewView, meta: { title: 'Overview' } },
-    { path: '/accounts', component: AccountsView, meta: { title: 'Accounts' } },
-    { path: '/requests', component: RequestsView, meta: { title: 'Requests' } },
-    { path: '/policies', component: PoliciesView, meta: { title: 'Policies' } },
-    { path: '/machines', component: MachinesView, meta: { title: 'Machines' } },
-    { path: '/records', component: RecordsView, meta: { title: 'Records' } },
-    { path: '/login', component: LoginView, meta: { title: 'Sign in' } },
+    { path: '/overview', component: OverviewView, meta: { titleKey: 'nav.overview' } },
+    { path: '/accounts', component: AccountsView, meta: { titleKey: 'nav.accounts' } },
+    { path: '/requests', component: RequestsView, meta: { titleKey: 'nav.requests' } },
+    { path: '/policies', component: PoliciesView, meta: { titleKey: 'nav.policies' } },
+    { path: '/machines', component: MachinesView, meta: { titleKey: 'nav.machines' } },
+    { path: '/records', component: RecordsView, meta: { titleKey: 'nav.records' } },
+    { path: '/login', component: LoginView, meta: { titleKey: 'login.title' } },
     { path: '/:pathMatch(.*)*', redirect: '/overview' }
   ]
 })
