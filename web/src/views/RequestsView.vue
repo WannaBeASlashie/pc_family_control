@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import Pill from '@/components/Pill.vue'
+import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import type { TimeRequest } from '@/api/types'
 import { fmtTime } from '@/utils/format'
-import { showToast } from '@/composables/useToast'
 import { useDashboard } from '@/composables/useDashboard'
 
 const requests = ref<TimeRequest[]>([])
@@ -17,9 +16,9 @@ async function load(): Promise<void> {
 async function decide(id: number, approve: boolean): Promise<void> {
   try {
     await api.post(`requests/${id}/decide`, { approve })
-    showToast(approve ? 'Approved' : 'Rejected')
+    ElMessage.success(approve ? 'Approved' : 'Rejected')
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed')
+    ElMessage.error(e instanceof Error ? e.message : 'Failed')
   }
   await Promise.all([load(), refresh()])
 }
@@ -28,27 +27,27 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="card">
-    <div class="wrap-x">
-      <table>
-        <thead>
-          <tr><th>Person</th><th>Request</th><th>Time</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in requests" :key="r.id">
-            <td><b>{{ r.person }}</b></td>
-            <td><Pill type="amber">+{{ r.minutes }} min</Pill></td>
-            <td class="soft">{{ fmtTime(r.createdAt) }}</td>
-            <td>
-              <div style="display:flex;gap:4px">
-                <button class="btn sm primary" @click="decide(r.id, true)">Approve</button>
-                <button class="btn sm danger" @click="decide(r.id, false)">Reject</button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="requests.length === 0"><td colspan="4" class="empty">No pending requests</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <el-card class="wb-card">
+    <template #header>
+      <div class="card-head"><span>Pending requests</span></div>
+    </template>
+    <el-table :data="requests" style="width: 100%">
+      <el-table-column prop="person" label="Person" min-width="140" show-overflow-tooltip />
+      <el-table-column label="Request" width="120">
+        <template #default="{ row }">
+          <el-tag type="warning" effect="light" round>+{{ row.minutes }} min</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="Time" width="170">
+        <template #default="{ row }"><span class="muted">{{ fmtTime(row.createdAt) }}</span></template>
+      </el-table-column>
+      <el-table-column label="Actions" width="190">
+        <template #default="{ row }">
+          <el-button type="primary" size="small" @click="decide(row.id, true)">Approve</el-button>
+          <el-button type="danger" size="small" plain @click="decide(row.id, false)">Reject</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+    <el-empty v-if="!requests.length" description="No pending requests" :image-size="60" />
+  </el-card>
 </template>

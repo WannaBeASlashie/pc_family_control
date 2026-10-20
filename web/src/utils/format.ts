@@ -1,4 +1,4 @@
-export type PillType = 'green' | 'red' | 'amber' | 'blue' | 'gray'
+export type TagType = 'success' | 'danger' | 'warning' | 'primary' | 'info'
 
 export function fmtSec(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined) return '-'
@@ -19,14 +19,14 @@ export function fmtTime(iso: string | null | undefined): string {
   })
 }
 
-export function reasonType(reason: string | null | undefined): PillType {
-  if (!reason) return 'gray'
-  if (reason.startsWith('offline')) return 'amber'
+export function reasonType(reason: string | null | undefined): TagType {
+  if (!reason) return 'info'
+  if (reason.startsWith('offline')) return 'warning'
   if (['exhausted', 'daily_quota', 'sliding_quota', 'curfew', 'session_limit', 'machine_off'].includes(reason)) {
-    return 'red'
+    return 'danger'
   }
-  if (reason === 'logout') return 'gray'
-  return 'blue'
+  if (reason === 'logout') return 'info'
+  return 'primary'
 }
 
 export function parseWindows(json: string): { start: string; end: string }[] {

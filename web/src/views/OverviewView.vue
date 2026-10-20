@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import StatCard from '@/components/StatCard.vue'
-import Pill from '@/components/Pill.vue'
+import { ElMessage } from 'element-plus'
+import { Plus, Check, Operation, Monitor } from '@element-plus/icons-vue'
+import WbLogo from '@/components/WbLogo.vue'
 import { useDashboard } from '@/composables/useDashboard'
-import { showToast } from '@/composables/useToast'
 import { api } from '@/api/client'
 import { fmtSec, fmtTime, reasonType } from '@/utils/format'
 
@@ -18,99 +18,128 @@ const sessionCount = computed(() => overview.value?.activeSessions.length ?? 0)
 const pendingCount = computed(() => overview.value?.pendingRequests ?? 0)
 const accountCount = computed(() => overview.value?.persons.length ?? 0)
 
+const entries = [
+  { title: 'New account', desc: 'Create a card + PIN for a family member', path: '/accounts?new=1', icon: Plus },
+  { title: 'Approve requests', desc: 'Grant extra time with one tap', path: '/requests', icon: Check },
+  { title: 'Edit policies', desc: 'Quotas, hours, sliding windows, offline', path: '/policies', icon: Operation },
+  { title: 'Machines', desc: 'Register PCs, send lock / logoff / message', path: '/machines', icon: Monitor }
+]
+
 async function approve(id: number): Promise<void> {
   try {
     await api.post(`requests/${id}/decide`, { approve: true })
-    showToast('Approved')
+    ElMessage.success('Approved')
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed')
+    ElMessage.error(e instanceof Error ? e.message : 'Failed')
   }
   await refresh()
 }
 </script>
 
 <template>
-  <div class="hero">
-    <div class="mark">∞</div>
+  <div class="hero wb-soft wb-card">
+    <WbLogo :size="64" />
     <div>
-      <h2>willBeyond <b>TimeBank</b></h2>
-      <p>Time, well spent — every minute accounted for.</p>
+      <div class="hero-name">willBeyond<span>TimeBank</span></div>
+      <div class="hero-slogan">Time, well spent — every minute accounted for.</div>
     </div>
-    <span class="chip">v2.1 · offline mode live</span>
+    <div class="hero-tags">
+      <el-tag size="small" round>v2.1 · offline mode live</el-tag>
+    </div>
   </div>
 
-  <div class="stats">
-    <StatCard label="Machines online" :value="online" />
-    <StatCard label="Active sessions" :value="sessionCount" />
-    <StatCard label="Pending requests" :value="pendingCount" danger clickable @click="router.push('/requests')" />
-    <StatCard label="Accounts" :value="accountCount" />
-  </div>
+  <el-row :gutter="16" style="margin-top: 16px">
+    <el-col :xs="12" :sm="12" :md="6">
+      <el-card class="stat-card wb-card" shadow="never">
+        <div class="stat-label">Machines online</div>
+        <div class="stat-value">{{ online }}</div>
+      </el-card>
+    </el-col>
+    <el-col :xs="12" :sm="12" :md="6">
+      <el-card class="stat-card wb-card" shadow="never">
+        <div class="stat-label">Active sessions</div>
+        <div class="stat-value">{{ sessionCount }}</div>
+      </el-card>
+    </el-col>
+    <el-col :xs="12" :sm="12" :md="6">
+      <el-card class="stat-card wb-card" shadow="never" style="cursor: pointer" @click="router.push('/requests')">
+        <div class="stat-label">Pending requests</div>
+        <div class="stat-value" :style="{ color: pendingCount > 0 ? '#ef4444' : undefined }">{{ pendingCount }}</div>
+      </el-card>
+    </el-col>
+    <el-col :xs="12" :sm="12" :md="6">
+      <el-card class="stat-card wb-card" shadow="never">
+        <div class="stat-label">Accounts</div>
+        <div class="stat-value">{{ accountCount }}</div>
+      </el-card>
+    </el-col>
+  </el-row>
 
-  <div class="cols">
-    <div class="card">
-      <div class="card-head">
-        <h3>Recent sessions</h3>
-        <span class="link" @click="router.push('/records')">All →</span>
-      </div>
-      <div class="wrap-x">
-        <table>
-          <thead>
-            <tr><th>Person</th><th>Machine</th><th>Started</th><th>Charged</th><th>Reason</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="s in recentSessions" :key="s.id">
-              <td>{{ s.person }}</td>
-              <td class="muted">{{ s.machine }}</td>
-              <td class="soft">{{ fmtTime(s.startedAt) }}</td>
-              <td>{{ fmtSec(s.chargedSeconds) }}</td>
-              <td>
-                <Pill v-if="s.status === 'active'" type="green">active</Pill>
-                <Pill v-else :type="reasonType(s.endReason)">{{ s.endReason || '-' }}</Pill>
-              </td>
-            </tr>
-            <tr v-if="recentSessions.length === 0"><td colspan="5" class="empty">No sessions yet</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+  <el-row :gutter="16" style="margin-top: 16px">
+    <el-col :xs="24" :md="14">
+      <el-card class="wb-card">
+        <template #header>
+          <div class="card-head">
+            <span>Recent sessions</span>
+            <el-button link type="primary" @click="router.push('/records')">All →</el-button>
+          </div>
+        </template>
+        <el-table :data="recentSessions" size="small">
+          <el-table-column prop="person" label="Person" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="machine" label="Machine" min-width="110" show-overflow-tooltip />
+          <el-table-column label="Started" width="150">
+            <template #default="{ row }">{{ fmtTime(row.startedAt) }}</template>
+          </el-table-column>
+          <el-table-column label="Charged" width="95">
+            <template #default="{ row }">{{ fmtSec(row.chargedSeconds) }}</template>
+          </el-table-column>
+          <el-table-column label="Reason" width="150">
+            <template #default="{ row }">
+              <el-tag v-if="row.status === 'active'" type="success" size="small" effect="light">active</el-tag>
+              <el-tag v-else :type="reasonType(row.endReason)" size="small" effect="light">{{ row.endReason || '-' }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="!recentSessions.length" description="No sessions yet" :image-size="60" />
+      </el-card>
+    </el-col>
 
-    <div class="card">
-      <div class="card-head">
-        <h3>Pending requests</h3>
-        <span class="link" @click="router.push('/requests')">Review →</span>
-      </div>
-      <div v-if="pendingPreview.length === 0" class="empty">No pending requests</div>
-      <div
-        v-for="r in pendingPreview"
-        :key="r.id"
-        style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)"
-      >
-        <div style="flex:1">
-          <b style="font-size:13.5px">{{ r.person }}</b>
-          <div class="soft" style="font-size:12px">{{ fmtTime(r.createdAt) }}</div>
+    <el-col :xs="24" :md="10">
+      <el-card class="wb-card">
+        <template #header>
+          <div class="card-head">
+            <span>Pending requests</span>
+            <el-button link type="primary" @click="router.push('/requests')">Review →</el-button>
+          </div>
+        </template>
+        <template v-if="pendingPreview.length">
+          <div v-for="r in pendingPreview" :key="r.id" class="list-row">
+            <div class="list-main">
+              <div class="list-name">{{ r.person }}</div>
+              <div class="list-sub">{{ fmtTime(r.createdAt) }}</div>
+            </div>
+            <el-tag type="warning" size="small" effect="light" round>+{{ r.minutes }} min</el-tag>
+            <el-button type="primary" size="small" @click="approve(r.id)">Approve</el-button>
+          </div>
+        </template>
+        <el-empty v-else description="No pending requests" :image-size="60" />
+      </el-card>
+    </el-col>
+  </el-row>
+
+  <el-row :gutter="16" style="margin-top: 16px">
+    <el-col v-for="e in entries" :key="e.path" :xs="12" :sm="12" :md="6">
+      <el-card shadow="hover" class="module-card wb-card" @click="router.push(e.path)">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div class="module-icon">
+            <el-icon :size="22"><component :is="e.icon" /></el-icon>
+          </div>
+          <div style="min-width: 0">
+            <div style="font-weight: 700; color: var(--wb-ink)">{{ e.title }}</div>
+            <div style="font-size: 12px; color: #909399; margin-top: 2px">{{ e.desc }}</div>
+          </div>
         </div>
-        <Pill type="amber">+{{ r.minutes }} min</Pill>
-        <button class="btn sm primary" @click="approve(r.id)">Approve</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="quick">
-    <router-link to="/accounts?new=1" class="q">
-      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
-      <div><b>New account</b><span>Create a card + PIN for a family member</span></div>
-    </router-link>
-    <router-link to="/requests" class="q">
-      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4.5 4.5L19 7"/></svg></div>
-      <div><b>Approve requests</b><span>Grant extra time with one tap</span></div>
-    </router-link>
-    <router-link to="/policies" class="q">
-      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16M4 16h16"/><circle cx="9" cy="8" r="2.2"/><circle cx="15" cy="16" r="2.2"/></svg></div>
-      <div><b>Edit policies</b><span>Daily quotas, hours, sliding windows, offline</span></div>
-    </router-link>
-    <router-link to="/machines" class="q">
-      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
-      <div><b>Machines</b><span>Register PCs, send lock / logoff / message</span></div>
-    </router-link>
-  </div>
+      </el-card>
+    </el-col>
+  </el-row>
 </template>

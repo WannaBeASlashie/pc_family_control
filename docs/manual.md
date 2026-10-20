@@ -454,7 +454,7 @@ dotnet ef migrations add <名称> --project src/server/TimeBank.Server
 ```
 
 管理控制台（`web/`）：Vue 3 + TypeScript + Vite + vue-router（history 模式，服务端 `MapFallback` 回 index.html）。
-设计 token 见 `web/src/styles/theme.css`，与 willBeyond Everything 共用视觉体系。
+**UI 库与 Everything 完全同栈**：Element Plus 2.9 + 共享设计系统 `web/src/styles/brand.css`（天空蓝天空蓝 #0ea5e9、18px 圆角、el-* 主题覆盖）+ `WbLogo` 品牌组件；应用层补充样式在 `app.css`。
 Docker 构建为多阶段（node 构建前端 → dotnet 发布 → 运行时镜像）；本地开发用 Vite 代理避免 CORS。
 Windows PowerShell 下 npm 用 `npm.cmd`（`npm.ps1` 受执行策略限制）。
 

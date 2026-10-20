@@ -1,0 +1,260 @@
+/* =========================================================
+   WillBeyond 设计系统 · 浅蓝圆润版
+   willBeyondEverything · 万物管家
+   品牌色：天空蓝 sky（清爽 / 明亮 / 无压）
+   整体：淡蓝白底 + 大圆角 + 柔阴影
+   生态内其他产品（TimeBank 等）共用本文件
+   ========================================================= */
+
+:root {
+  /* 品牌色板 */
+  --wb-primary: #0ea5e9;            /* sky-500 主色 */
+  --wb-primary-strong: #0284c7;     /* sky-600 深一档 */
+  --wb-accent: #38bdf8;             /* sky-400 渐变浅端 */
+  --wb-gradient: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 55%, #0284c7 100%);
+  --wb-ink: #0c4a6e;                /* sky-900 品牌深色（标题） */
+  --wb-ink-soft: #075985;           /* sky-800 */
+  --wb-on-soft: #075985;            /* 浅蓝品牌区上的主文字 */
+  --wb-on-soft-muted: #64748b;      /* 浅蓝品牌区上的次文字 */
+  /* 兼容旧引用 */
+  --wb-on-ink: #075985;
+  --wb-on-ink-muted: #64748b;
+  --wb-line: #e3eefb;               /* 分割线 / 描边（淡蓝） */
+  --wb-bg: #eef6fd;                 /* 页面底色（淡蓝白） */
+
+  /* 覆盖 Element Plus 主题 */
+  --el-color-primary: var(--wb-primary);
+  --el-color-primary-light-3: #56c0f0;
+  --el-color-primary-light-5: #86d2f4;
+  --el-color-primary-light-7: #b6e4f9;
+  --el-color-primary-light-8: #ceedfb;
+  --el-color-primary-light-9: #e6f6fc;
+  --el-color-primary-dark-2: #0284c7;
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 8px;
+  --el-font-family: "Inter", "HarmonyOS Sans SC", "PingFang SC",
+    "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--el-font-family);
+  -webkit-font-smoothing: antialiased;
+  color: #1f2937;
+}
+
+/* ---------- 圆润化 Element 组件 ---------- */
+
+.el-card {
+  border-radius: 18px;
+  border: 1px solid var(--wb-line);
+  box-shadow: 0 4px 22px -8px rgba(14, 116, 233, 0.08);
+}
+
+.el-button {
+  border-radius: 12px;
+}
+
+.el-button--large {
+  border-radius: 14px;
+}
+
+.el-dialog {
+  border-radius: 18px;
+}
+
+.el-message-box {
+  border-radius: 16px;
+}
+
+.el-table {
+  border-radius: 12px;
+}
+
+.el-tag {
+  border-radius: 999px;
+}
+
+/* ---------- 通用品牌组件 ---------- */
+
+.wb-card {
+  border-radius: 18px;
+  border: 1px solid var(--wb-line);
+  box-shadow: 0 4px 22px -8px rgba(14, 116, 233, 0.08);
+}
+
+/* 浅蓝品牌区（登录页左侧 / 仪表盘 hero）共用底 */
+.wb-soft {
+  background:
+    radial-gradient(640px 420px at 18% 16%, rgba(56, 189, 248, 0.18), transparent 62%),
+    radial-gradient(520px 340px at 82% 84%, rgba(96, 165, 250, 0.14), transparent 62%),
+    linear-gradient(rgba(2, 132, 199, 0.045) 1px, transparent 1px) 0 0 / 100% 48px,
+    linear-gradient(90deg, rgba(2, 132, 199, 0.045) 1px, transparent 1px) 0 0 / 48px 100%,
+    #f3f9ff;
+  color: var(--wb-on-soft);
+}
+
+/* 兼容旧类名 */
+.wb-deep {
+  background:
+    radial-gradient(640px 420px at 18% 16%, rgba(56, 189, 248, 0.18), transparent 62%),
+    radial-gradient(520px 340px at 82% 84%, rgba(96, 165, 250, 0.14), transparent 62%),
+    linear-gradient(rgba(2, 132, 199, 0.045) 1px, transparent 1px) 0 0 / 100% 48px,
+    linear-gradient(90deg, rgba(2, 132, 199, 0.045) 1px, transparent 1px) 0 0 / 48px 100%,
+    #f3f9ff;
+  color: var(--wb-on-soft);
+}
+
+/* ---------- 浅蓝侧边栏 ---------- */
+
+.wb-sidebar {
+  background: linear-gradient(180deg, #fbfdff 0%, #eef6fd 100%);
+  border-right: 1px solid var(--wb-line);
+  display: flex;
+  flex-direction: column;
+}
+
+.wb-sidebar .side-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 18px 16px;
+  border-bottom: 1px solid var(--wb-line);
+}
+
+.wb-sidebar .side-brand .side-name {
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--wb-ink);
+  line-height: 1.15;
+}
+
+.wb-sidebar .side-brand .side-name small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #8aa4bd;
+}
+
+.wb-sidebar .el-menu {
+  background: transparent;
+  border-right: none;
+  padding: 10px;
+  flex: 1;
+}
+
+.wb-sidebar .el-menu-item {
+  position: relative;
+  height: 46px;
+  margin-bottom: 4px;
+  border-radius: 14px;
+  color: #587088;
+  font-weight: 500;
+}
+
+.wb-sidebar .el-menu-item:hover {
+  background: #e4f2fd;
+  color: var(--wb-primary-strong);
+}
+
+.wb-sidebar .el-menu-item.is-active {
+  background: #d9edfd;
+  color: var(--wb-primary-strong);
+  font-weight: 600;
+}
+
+.wb-sidebar .el-menu-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  border-radius: 4px;
+  background: var(--wb-gradient);
+}
+
+.wb-sidebar .side-foot {
+  padding: 14px 18px;
+  border-top: 1px solid var(--wb-line);
+  font-size: 11px;
+  color: #8aa4bd;
+  line-height: 1.7;
+}
+
+.wb-sidebar .side-foot .eco {
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #7c9cb8;
+}
+
+/* ---------- 顶栏 ---------- */
+
+.wb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-bottom: 1px solid var(--wb-line);
+}
+
+.wb-header .crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.wb-header .crumb .product {
+  font-weight: 700;
+  background: var(--wb-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wb-header .crumb .sep {
+  color: #bfd4e6;
+}
+
+.wb-header .crumb .page {
+  color: #33506b;
+  font-weight: 600;
+}
+
+/* ---------- 页面通用 ---------- */
+
+.wb-page-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.wb-page-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--wb-ink);
+}
+
+.wb-page-sub {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* 品牌强调文字（渐变） */
+.wb-grad-text {
+  background: var(--wb-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

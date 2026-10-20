@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Sidebar from '@/components/Sidebar.vue'
 import Topbar from '@/components/Topbar.vue'
-import ToastHost from '@/components/ToastHost.vue'
 import { useDashboard } from '@/composables/useDashboard'
 import { getToken } from '@/api/client'
 
@@ -26,26 +25,32 @@ onMounted(() => {
   window.addEventListener('tb:unauthorized', onUnauthorized)
 })
 
-watch(() => route.path, () => {
-  if (getToken() && !isLogin.value) refresh()
-})
-
 onUnmounted(() => {
   if (timer) window.clearInterval(timer)
   window.removeEventListener('tb:unauthorized', onUnauthorized)
 })
+
+watch(
+  () => route.path,
+  () => {
+    if (getToken() && !isLogin.value) refresh()
+  }
+)
 </script>
 
 <template>
-  <div v-if="isLogin">
-    <router-view />
-  </div>
-  <div v-else class="shell">
-    <Sidebar />
-    <div class="main">
-      <Topbar />
-      <main><router-view /></main>
-    </div>
-  </div>
-  <ToastHost />
+  <router-view v-if="isLogin" />
+  <el-container v-else style="height: 100%">
+    <el-aside width="228px" class="wb-sidebar">
+      <Sidebar />
+    </el-aside>
+    <el-container>
+      <el-header height="60px" class="wb-header">
+        <Topbar />
+      </el-header>
+      <el-main class="wb-main">
+        <router-view />
+      </el-main>
+    </el-container>
+  </el-container>
 </template>

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import WbLogo from '@/components/WbLogo.vue'
 import { useAuth } from '@/composables/useAuth'
 
 const router = useRouter()
@@ -26,21 +28,24 @@ async function submit(): Promise<void> {
 
 <template>
   <div class="login-screen">
-    <div class="login-box">
-      <div class="brand">
-        <div class="mark">∞</div>
-        <div class="wordmark"><b>willBeyond</b><span>TIMEBANK</span></div>
-      </div>
-      <h2>Admin Console</h2>
-      <div class="sub">Sign in to manage family time</div>
-      <form @submit.prevent="submit">
-        <label>Password</label>
-        <input v-model="password" type="password" autofocus />
-        <div class="form-actions">
-          <button class="btn primary" style="width:100%" :disabled="busy">Sign in</button>
+    <el-card class="wb-card login-card" shadow="never">
+      <div class="login-brand">
+        <WbLogo :size="46" />
+        <div class="side-name" style="font-weight: 800; color: var(--wb-ink); line-height: 1.15">
+          willBeyond
+          <small style="display: block; font-size: 10.5px; letter-spacing: 0.22em; color: #8aa4bd">TIMEBANK</small>
         </div>
-      </form>
-      <p class="login-err">{{ error }}</p>
-    </div>
+      </div>
+      <div class="login-title">Admin Console</div>
+      <div class="login-sub">Sign in to manage family time</div>
+
+      <el-form label-position="top" @submit.prevent="submit">
+        <el-form-item label="Password">
+          <el-input v-model="password" type="password" show-password autofocus @keyup.enter="submit" />
+        </el-form-item>
+        <el-button type="primary" style="width: 100%" :loading="busy" @click="submit">Sign in</el-button>
+      </el-form>
+      <div class="login-err">{{ error }}</div>
+    </el-card>
   </div>
 </template>

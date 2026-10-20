@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import Pill from '@/components/Pill.vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { api } from '@/api/client'
 import type { CreateMachineResult, MachineDetail } from '@/api/types'
 import { fmtTime, isOnline } from '@/utils/format'
-import { showToast } from '@/composables/useToast'
 
 const machines = ref<MachineDetail[]>([])
 
@@ -14,41 +14,77 @@ async function load(): Promise<void> {
 
 async function send(id: number, action: string): Promise<void> {
   let text: string | undefined
-  if (action === 'message') {
-    const input = window.prompt('Message:')
-    if (!input) return
-    text = input
+  try {
+    if (action === 'message') {
+      const { value } = await ElMessageBox.prompt('Message content:', 'Send message', {
+        confirmButtonText: 'Send',
+        cancelButtonText: 'Cancel'
+      })
+      if (!value) return
+      text = value
+    }
+    if (action === 'shutdown' || action === 'reboot') {
+      await ElMessageBox.confirm(`Really ${action} this machine?`, 'Confirm', {
+        type: 'warning',
+        confirmButtonText: 'Yes',
+        cancelButtonText: 'Cancel'
+      })
+    }
+  } catch {
+    return
   }
-  if ((action === 'shutdown' || action === 'reboot') && !window.confirm(`Really ${action} this machine?`)) return
   try {
     const r = await api.post<{ ok: boolean; reason?: string }>(`machines/${id}/command`, { action, text })
-    showToast(r.ok ? 'Command queued (applies on next heartbeat)' : r.reason || 'Failed')
+    if (r.ok) ElMessage.success('Command queued (applies on next heartbeat)')
+    else ElMessage.warning(r.reason || 'Failed')
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed')
+    ElMessage.error(e instanceof Error ? e.message : 'Failed')
   }
 }
 
 async function register(): Promise<void> {
-  const name = window.prompt('Machine name (e.g. PC-1):')
+  let name = ''
+  try {
+    const { value } = await ElMessageBox.prompt('Machine name (e.g. PC-1):', 'Register machine', {
+      confirmButtonText: 'Create',
+      cancelButtonText: 'Cancel'
+    })
+    name = (value || '').trim()
+  } catch {
+    return
+  }
   if (!name) return
   try {
     const r = await api.post<CreateMachineResult>('machines', { name })
     if (r.ok) {
-      window.alert(`Machine created: id=${r.id}\nSecret: ${r.secret}\n\nUse with install-client.ps1 -MachineId/-Secret`)
+      await ElMessageBox.alert(
+        `Machine created: id=${r.id}\nSecret: ${r.secret}\n\nUse with install-client.ps1 -MachineId/-Secret`,
+        'Machine registered',
+        { confirmButtonText: 'OK' }
+      )
     }
     await load()
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed')
+    ElMessage.error(e instanceof Error ? e.message : 'Failed')
   }
 }
 
 async function remove(id: number, name: string): Promise<void> {
-  if (!window.confirm(`Delete machine "${name}"?\nIts session history and commands will be removed (irreversible).`)) return
+  try {
+    await ElMessageBox.confirm(
+      `Delete machine "${name}"?\nIts session history and commands will be removed (irreversible).`,
+      'Delete machine',
+      { type: 'warning', confirmButtonText: 'Delete', cancelButtonText: 'Cancel' }
+    )
+  } catch {
+    return
+  }
   try {
     const r = await api.del<{ ok: boolean; reason?: string }>(`machines/${id}`)
-    showToast(r.ok ? 'Deleted' : r.reason || 'Failed')
+    if (r.ok) ElMessage.success('Deleted')
+    else ElMessage.warning(r.reason || 'Failed')
   } catch (e) {
-    showToast(e instanceof Error ? e.message : 'Failed')
+    ElMessage.error(e instanceof Error ? e.message : 'Failed')
   }
   await load()
 }
@@ -57,37 +93,40 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="toolbar"><button class="btn primary" @click="register">+ Register machine</button></div>
-
-  <div class="card">
-    <div class="wrap-x">
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Name</th><th>Online</th><th>Last heartbeat</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="m in machines" :key="m.id">
-            <td class="soft">{{ m.id }}</td>
-            <td><b>{{ m.name }}</b></td>
-            <td>
-              <Pill :type="isOnline(m.lastSeenAt) ? 'green' : 'gray'">{{ isOnline(m.lastSeenAt) ? 'Online' : 'Offline' }}</Pill>
-            </td>
-            <td class="soft">{{ fmtTime(m.lastSeenAt) }}</td>
-            <td>
-              <div style="display:flex;gap:4px;flex-wrap:wrap">
-                <button class="btn sm" @click="send(m.id, 'lock')">Lock</button>
-                <button class="btn sm" @click="send(m.id, 'unlock')">Unlock</button>
-                <button class="btn sm" @click="send(m.id, 'logoff')">Logoff</button>
-                <button class="btn sm" @click="send(m.id, 'message')">Message</button>
-                <button class="btn sm danger" @click="send(m.id, 'shutdown')">Shutdown</button>
-                <button class="btn sm danger" @click="send(m.id, 'reboot')">Reboot</button>
-                <button class="btn sm" @click="remove(m.id, m.name)">Delete</button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="machines.length === 0"><td colspan="5" class="empty">No machines registered</td></tr>
-        </tbody>
-      </table>
-    </div>
+  <div style="margin-bottom: 16px">
+    <el-button type="primary" :icon="Plus" @click="register">Register machine</el-button>
   </div>
+
+  <el-card class="wb-card">
+    <el-table :data="machines" style="width: 100%">
+      <el-table-column prop="id" label="ID" width="60" />
+      <el-table-column prop="name" label="Name" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }"><b>{{ row.name }}</b></template>
+      </el-table-column>
+      <el-table-column label="Status" width="100">
+        <template #default="{ row }">
+          <el-tag :type="isOnline(row.lastSeenAt) ? 'success' : 'info'" size="small" effect="light">
+            {{ isOnline(row.lastSeenAt) ? 'Online' : 'Offline' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="Last heartbeat" width="170">
+        <template #default="{ row }"><span class="muted">{{ fmtTime(row.lastSeenAt) }}</span></template>
+      </el-table-column>
+      <el-table-column label="Actions" width="430">
+        <template #default="{ row }">
+          <div class="row-actions">
+            <el-button size="small" @click="send(row.id, 'lock')">Lock</el-button>
+            <el-button size="small" @click="send(row.id, 'unlock')">Unlock</el-button>
+            <el-button size="small" @click="send(row.id, 'logoff')">Logoff</el-button>
+            <el-button size="small" @click="send(row.id, 'message')">Message</el-button>
+            <el-button size="small" type="danger" plain @click="send(row.id, 'shutdown')">Shutdown</el-button>
+            <el-button size="small" type="danger" plain @click="send(row.id, 'reboot')">Reboot</el-button>
+            <el-button size="small" type="danger" text @click="remove(row.id, row.name)">Delete</el-button>
+          </div>
+        </template>
+      </el-table-column>
+    </el-table>
+    <el-empty v-if="!machines.length" description="No machines registered" :image-size="60" />
+  </el-card>
 </template>

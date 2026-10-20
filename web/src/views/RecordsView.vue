@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import Pill from '@/components/Pill.vue'
 import { api } from '@/api/client'
 import type { SessionRecord } from '@/api/types'
 import { fmtSec, fmtTime, reasonType } from '@/utils/format'
@@ -13,28 +12,35 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="card">
-    <div class="card-head"><h3>Recent sessions</h3></div>
-    <div class="wrap-x">
-      <table>
-        <thead>
-          <tr><th>Person</th><th>Machine</th><th>Started</th><th>Ended</th><th>Charged</th><th>Reason</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="s in sessions" :key="s.id">
-            <td><b>{{ s.person }}</b></td>
-            <td class="muted">{{ s.machine }}</td>
-            <td class="soft">{{ fmtTime(s.startedAt) }}</td>
-            <td class="soft">
-              <Pill v-if="s.status === 'active'" type="green">active</Pill>
-              <template v-else>{{ fmtTime(s.endedAt) }}</template>
-            </td>
-            <td>{{ fmtSec(s.chargedSeconds) }}</td>
-            <td><Pill :type="reasonType(s.endReason)">{{ s.endReason || '-' }}</Pill></td>
-          </tr>
-          <tr v-if="sessions.length === 0"><td colspan="6" class="empty">No sessions yet</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <el-card class="wb-card">
+    <template #header>
+      <div class="card-head"><span>Recent sessions</span></div>
+    </template>
+    <el-table :data="sessions" style="width: 100%">
+      <el-table-column prop="person" label="Person" min-width="130" show-overflow-tooltip>
+        <template #default="{ row }"><b>{{ row.person }}</b></template>
+      </el-table-column>
+      <el-table-column prop="machine" label="Machine" min-width="140" show-overflow-tooltip>
+        <template #default="{ row }"><span class="muted">{{ row.machine }}</span></template>
+      </el-table-column>
+      <el-table-column label="Started" width="160">
+        <template #default="{ row }"><span class="muted">{{ fmtTime(row.startedAt) }}</span></template>
+      </el-table-column>
+      <el-table-column label="Ended" width="160">
+        <template #default="{ row }">
+          <el-tag v-if="row.status === 'active'" type="success" size="small" effect="light">active</el-tag>
+          <span v-else class="muted">{{ fmtTime(row.endedAt) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="Charged" width="95">
+        <template #default="{ row }">{{ fmtSec(row.chargedSeconds) }}</template>
+      </el-table-column>
+      <el-table-column label="Reason" width="150">
+        <template #default="{ row }">
+          <el-tag :type="reasonType(row.endReason)" size="small" effect="light">{{ row.endReason || '-' }}</el-tag>
+        </template>
+      </el-table-column>
+    </el-table>
+    <el-empty v-if="!sessions.length" description="No sessions yet" :image-size="60" />
+  </el-card>
 </template>
