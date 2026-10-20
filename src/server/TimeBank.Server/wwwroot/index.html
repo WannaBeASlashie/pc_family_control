@@ -6,172 +6,373 @@
 <title>TimeBank — Admin Console</title>
 <style>
   :root {
-    --bg:#0e1420; --panel:#161d2e; --panel2:#1a2233; --border:#2a3550;
-    --text:#e8ecf4; --muted:#8a93a8; --blue:#3b82f6; --green:#34d399;
-    --red:#ef4444; --amber:#f59e0b; --radius:10px;
+    --bg:#f5f8fd; --card:#ffffff; --line:#eef2f8; --line2:#e5eaf2;
+    --text:#1f2937; --muted:#6b7280; --soft:#8a94a6;
+    --primary:#2f6bff; --primary-weak:#e9f1ff; --primary-dark:#1f57e0;
+    --green:#15803d; --green-weak:#e8f7ee;
+    --red:#d92d20; --red-weak:#fdecec;
+    --amber:#b45309; --amber-weak:#fff4e5;
+    --radius:16px;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.06);
   }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; font-size:15px; }
-  header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:20; }
-  header h1 { font-size:18px; flex:1; letter-spacing:.2px; }
-  header h1 span { color:var(--muted); font-weight:400; margin-left:8px; font-size:14px; }
-  nav { display:flex; gap:6px; padding:10px 14px; overflow-x:auto; border-bottom:1px solid var(--border); background:var(--bg); position:sticky; top:57px; z-index:19; }
-  nav button { border:none; background:transparent; color:var(--muted); padding:8px 14px; border-radius:8px; cursor:pointer; font-size:15px; white-space:nowrap; }
-  nav button.active { background:var(--panel2); color:var(--text); }
-  nav .badge { background:var(--amber); color:#1a1200; border-radius:9px; padding:0 6px; font-size:12px; margin-left:4px; font-weight:bold; }
-  main { padding:16px; max-width:980px; margin:0 auto; }
-  section { display:none; }
-  section.active { display:block; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
-  .card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
-  .card .num { font-size:26px; font-weight:bold; }
-  .card .lbl { color:var(--muted); font-size:13px; margin-top:2px; }
-  table { width:100%; border-collapse:collapse; margin:8px 0 20px; }
-  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); font-size:14px; vertical-align:middle; }
-  th { color:var(--muted); font-weight:500; font-size:13px; }
-  .btn { border:none; border-radius:7px; padding:7px 12px; cursor:pointer; font-size:13px; background:var(--panel2); color:var(--text); border:1px solid var(--border); }
-  .btn:hover { filter:brightness(1.2); }
-  .btn.blue { background:var(--blue); border-color:var(--blue); color:#fff; }
-  .btn.green { background:var(--green); border-color:var(--green); color:#062; }
-  .btn.red { background:var(--red); border-color:var(--red); color:#fff; }
-  .btn.amber { background:var(--amber); border-color:var(--amber); color:#1a1200; }
-  .btn.sm { padding:4px 8px; font-size:12px; }
-  .panel { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
-  .panel h3 { font-size:15px; margin-bottom:12px; }
-  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
-  label { display:block; color:var(--muted); font-size:13px; margin:8px 0 4px; }
-  input, select { width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:9px 10px; font-size:15px; }
-  input[type=checkbox] { width:auto; }
-  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
-  .dot.on { background:var(--green); } .dot.off { background:#555; }
-  .muted { color:var(--muted); } .green { color:var(--green); } .red { color:var(--red); } .amber { color:var(--amber); }
-  .row-actions { display:flex; gap:4px; flex-wrap:wrap; }
-  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--panel2); border:1px solid var(--border); padding:10px 20px; border-radius:8px; display:none; z-index:99; }
-  #login { position:fixed; inset:0; background:var(--bg); display:none; align-items:center; justify-content:center; z-index:50; }
-  #login .box { width:300px; }
-  #login h2 { text-align:center; margin-bottom:4px; }
-  #login .sub { text-align:center; color:var(--muted); font-size:13px; margin-bottom:16px; }
+  body { background:var(--bg); color:var(--text); font-size:14px;
+         font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+
+  /* ---------- shell ---------- */
+  .shell { display:flex; min-height:100vh; }
+  .sidebar { width:228px; flex:none; background:var(--card); border-right:1px solid var(--line);
+             padding:18px 14px; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; }
+  .brand { display:flex; align-items:center; gap:10px; padding:4px 8px 22px; }
+  .mark { width:38px; height:38px; border-radius:11px; flex:none;
+          background:linear-gradient(135deg,#4c8dff,#2f6bff);
+          color:#fff; display:flex; align-items:center; justify-content:center;
+          font-size:24px; font-weight:700; line-height:1; padding-bottom:3px; }
+  .wordmark b { display:block; font-size:16px; letter-spacing:.2px; }
+  .wordmark span { display:block; font-size:9px; letter-spacing:2.4px; color:var(--soft); font-weight:600; margin-top:2px; }
+
+  .nav { display:flex; flex-direction:column; gap:2px; }
+  .nav button { display:flex; align-items:center; gap:10px; width:100%; border:none; background:transparent;
+                color:#55607a; font-size:14px; padding:10px 12px; border-radius:10px; cursor:pointer;
+                text-align:left; font-weight:500; }
+  .nav button:hover { background:#f6f9ff; color:var(--text); }
+  .nav button.active { background:var(--primary-weak); color:var(--primary); font-weight:600; }
+  .nav svg { width:18px; height:18px; flex:none; }
+  .nav .badge { margin-left:auto; background:var(--amber-weak); color:var(--amber);
+                font-size:11px; font-weight:700; border-radius:999px; padding:1px 7px; }
+  .sidebar .foot { margin-top:auto; color:var(--soft); font-size:11px; padding:10px 10px 0;
+                   border-top:1px solid var(--line); }
+
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .topbar { display:flex; align-items:center; gap:14px; padding:14px 28px;
+            background:rgba(245,248,253,.85); backdrop-filter:blur(6px);
+            position:sticky; top:0; z-index:20; border-bottom:1px solid var(--line); }
+  .crumb { font-size:15px; font-weight:700; }
+  .crumb .sep { color:#c3ccdb; font-weight:400; margin:0 8px; }
+  .crumb .cur { font-weight:500; color:var(--muted); }
+  .topbar .spacer { flex:1; }
+  .who { display:flex; align-items:center; gap:8px; color:var(--text); font-size:13px; }
+  .avatar { width:28px; height:28px; border-radius:50%; background:var(--primary);
+            color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .signout { display:flex; align-items:center; gap:6px; border:none; background:transparent;
+             color:var(--red); font-size:13px; cursor:pointer; padding:6px 8px; border-radius:8px; }
+  .signout:hover { background:var(--red-weak); }
+  .signout svg { width:15px; height:15px; }
+
+  main { padding:22px 28px 40px; max-width:1180px; width:100%; margin:0 auto; }
+  section { display:none; } section.active { display:block; }
+
+  /* ---------- hero ---------- */
+  .hero { display:flex; align-items:center; gap:18px; padding:26px 28px; border-radius:20px;
+          background:linear-gradient(120deg,#e9f1ff 0%,#f2f7ff 55%,#f7faff 100%);
+          margin-bottom:18px; }
+  .hero .mark { width:56px; height:56px; border-radius:15px; font-size:34px; box-shadow:0 8px 18px rgba(47,107,255,.25); }
+  .hero h2 { font-size:26px; font-weight:400; letter-spacing:.2px; }
+  .hero h2 b { font-weight:700; }
+  .hero p { color:#64748b; font-size:13px; margin-top:4px; }
+  .hero .chip { margin-left:auto; background:#e3efff; color:var(--primary); font-size:12px;
+                font-weight:600; padding:5px 12px; border-radius:999px; white-space:nowrap; }
+
+  /* ---------- cards / stats ---------- */
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:18px; }
+  .stat { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px 20px; }
+  .stat .lbl { color:var(--muted); font-size:13px; }
+  .stat .num { font-size:30px; font-weight:700; margin-top:6px; letter-spacing:.5px; }
+  .stat .num.red { color:var(--red); }
+  .stat.click { cursor:pointer; }
+
+  .cols { display:grid; grid-template-columns:1.65fr 1fr; gap:14px; margin-bottom:18px; align-items:start; }
+  .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px 20px; }
+  .card + .card { margin-top:14px; }
+  .card-head { display:flex; align-items:center; margin-bottom:8px; }
+  .card-head h3 { font-size:15px; font-weight:700; }
+  .card-head .link { margin-left:auto; color:var(--primary); font-size:13px; font-weight:600;
+                     text-decoration:none; cursor:pointer; }
+  .card-head .link:hover { text-decoration:underline; }
+
+  /* ---------- quick actions ---------- */
+  .quick { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; }
+  .quick .q { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow);
+              padding:18px; cursor:pointer; display:flex; gap:12px; align-items:flex-start; }
+  .quick .q:hover { transform:translateY(-1px); box-shadow:0 2px 4px rgba(16,24,40,.05),0 12px 28px rgba(16,24,40,.09); }
+  .quick .q .ic { width:40px; height:40px; flex:none; border-radius:12px; background:var(--primary-weak);
+                  color:var(--primary); display:flex; align-items:center; justify-content:center; }
+  .quick .q .ic svg { width:20px; height:20px; }
+  .quick .q b { display:block; font-size:14px; margin-bottom:2px; }
+  .quick .q span { color:var(--soft); font-size:12px; line-height:1.5; }
+
+  /* ---------- tables ---------- */
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--soft); font-weight:500; font-size:12px; white-space:nowrap; }
+  td { font-size:13.5px; }
+  tbody tr:hover td, table tr:hover td { background:#f9fbff; }
+  table tr:last-child td { border-bottom:none; }
+  .wrap-x { overflow-x:auto; }
+
+  /* ---------- pills / text ---------- */
+  .pill { display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:999px; white-space:nowrap; }
+  .pill.green { background:var(--green-weak); color:var(--green); }
+  .pill.red { background:var(--red-weak); color:var(--red); }
+  .pill.amber { background:var(--amber-weak); color:var(--amber); }
+  .pill.blue { background:var(--primary-weak); color:var(--primary); }
+  .pill.gray { background:#f1f3f6; color:#5b6472; }
+  .muted { color:var(--muted); } .soft { color:var(--soft); }
+  .balance { font-family:Consolas,monospace; font-weight:700; color:var(--text); }
+  .empty { color:var(--soft); padding:14px 0; font-size:13px; }
+
+  /* ---------- buttons / forms ---------- */
+  .btn { border:none; border-radius:10px; padding:8px 14px; cursor:pointer; font-size:13px; font-weight:600;
+         background:var(--card); color:#374151; border:1px solid var(--line2); }
+  .btn:hover { background:#f8faff; }
+  .btn.primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+  .btn.primary:hover { background:var(--primary-dark); }
+  .btn.danger { color:var(--red); border-color:#f3d2cf; background:#fff; }
+  .btn.danger:hover { background:var(--red-weak); }
+  .btn.sm { padding:4px 10px; font-size:12px; border-radius:8px; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+
+  label { display:block; color:var(--muted); font-size:12.5px; margin:10px 0 4px; }
+  input, select { width:100%; background:#f8fafd; color:var(--text); border:1px solid var(--line2);
+                  border-radius:10px; padding:9px 11px; font-size:14px; outline:none; }
+  input:focus, select:focus { border-color:#b9cdfb; background:#fff; box-shadow:0 0 0 3px rgba(47,107,255,.12); }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+  .toolbar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center; }
   .winrow { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   .winrow input { flex:1; }
-  .toolbar { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center; }
-  .balance { font-family:Consolas,monospace; font-weight:bold; color:var(--green); }
+  .hint { color:var(--soft); font-size:12.5px; margin-top:8px; line-height:1.6; }
+  .form-actions { margin-top:16px; display:flex; gap:8px; }
+
+  /* ---------- login ---------- */
+  #login { position:fixed; inset:0; background:var(--bg); display:none; align-items:center; justify-content:center; z-index:50; }
+  #login .box { width:330px; background:var(--card); border-radius:20px; box-shadow:var(--shadow); padding:30px 28px; }
+  #login .brand { padding:0 0 18px; justify-content:center; }
+  #login h2 { text-align:center; font-size:17px; margin-bottom:2px; }
+  #login .sub { text-align:center; color:var(--soft); font-size:12px; margin-bottom:18px; }
+  #loginErr { color:var(--red); text-align:center; font-size:13px; margin-top:8px; min-height:18px; }
+
+  /* ---------- toast ---------- */
+  #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+           background:#1f2937; color:#fff; padding:10px 20px; border-radius:12px;
+           font-size:13px; display:none; z-index:99; box-shadow:var(--shadow); }
+
+  @media (max-width: 760px) {
+    .shell { flex-direction:column; }
+    .sidebar { width:100%; height:auto; position:static; padding:12px 14px;
+               flex-direction:row; align-items:center; gap:14px; }
+    .brand { padding:0; }
+    .sidebar .foot { display:none; }
+    .nav { flex-direction:row; overflow-x:auto; flex:1; }
+    .nav button { white-space:nowrap; padding:8px 12px; }
+    .nav button span.lbl-full { display:none; }
+    .topbar { padding:12px 16px; }
+    main { padding:16px; }
+    .cols { grid-template-columns:1fr; }
+  }
 </style>
 </head>
 <body>
 
 <div id="login">
-  <div class="box panel">
-    <h2>TimeBank</h2>
-    <div class="sub">willBeyond</div>
-    <label>Admin password</label>
+  <div class="box">
+    <div class="brand">
+      <div class="mark">∞</div>
+      <div class="wordmark"><b>willBeyond</b><span>TIMEBANK</span></div>
+    </div>
+    <h2>Admin Console</h2>
+    <div class="sub">Sign in to manage family time</div>
+    <label>Password</label>
     <input type="password" id="pwd" autofocus>
-    <br><br>
-    <button class="btn blue" style="width:100%" onclick="doLogin()">Sign in</button>
-    <p id="loginErr" class="red" style="margin-top:8px;text-align:center"></p>
+    <div class="form-actions">
+      <button class="btn primary" style="width:100%" onclick="doLogin()">Sign in</button>
+    </div>
+    <p id="loginErr"></p>
   </div>
 </div>
 
-<header>
-  <h1>TimeBank <span>willBeyond · Admin Console</span></h1>
-  <span id="hdBadge"></span>
-  <button class="btn" onclick="logout()">Sign out</button>
-</header>
-
-<nav id="nav">
-  <button data-tab="overview" class="active">Overview</button>
-  <button data-tab="accounts">Accounts</button>
-  <button data-tab="requests">Requests<span id="reqBadge" class="badge" style="display:none"></span></button>
-  <button data-tab="policies">Policies</button>
-  <button data-tab="machines">Machines</button>
-  <button data-tab="records">Records</button>
-</nav>
-
-<main>
-  <!-- Overview -->
-  <section id="tab-overview" class="active">
-    <div class="cards">
-      <div class="card"><div class="num" id="ovOnline">-</div><div class="lbl">Machines online</div></div>
-      <div class="card"><div class="num" id="ovSessions">-</div><div class="lbl">Active sessions</div></div>
-      <div class="card"><div class="num amber" id="ovPending" style="cursor:pointer" onclick="switchTab('requests')">-</div><div class="lbl">Pending requests</div></div>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">∞</div>
+      <div class="wordmark"><b>willBeyond</b><span>TIMEBANK</span></div>
     </div>
-    <div class="panel"><h3>Active sessions</h3><div id="ovSessionList" class="muted">No one is signed in</div></div>
-    <div class="panel"><h3>Machines</h3><div id="ovMachines" class="muted"></div></div>
-  </section>
+    <nav class="nav" id="nav">
+      <button data-tab="overview" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>
+        <span class="lbl-full">Overview</span>
+      </button>
+      <button data-tab="accounts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20c.6-3.2 3.1-5 6.2-5s5.6 1.8 6.2 5"/><path d="M16 4.5a3 3 0 0 1 0 6"/><path d="M18.5 14.6c1.7.8 2.7 2.4 2.9 4.4"/></svg>
+        <span class="lbl-full">Accounts</span>
+      </button>
+      <button data-tab="requests">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="m8.5 12 2.3 2.3L16 9.5"/></svg>
+        <span class="lbl-full">Requests</span><span id="reqBadge" class="badge" style="display:none"></span>
+      </button>
+      <button data-tab="policies">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg>
+        <span class="lbl-full">Policies</span>
+      </button>
+      <button data-tab="machines">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+        <span class="lbl-full">Machines</span>
+      </button>
+      <button data-tab="records">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+        <span class="lbl-full">Records</span>
+      </button>
+    </nav>
+    <div class="foot">willBeyond TimeBank · LAN only</div>
+  </aside>
 
-  <!-- Accounts -->
-  <section id="tab-accounts">
-    <div class="panel" id="newPersonPanel" style="display:none">
-      <h3>New account</h3>
-      <div class="grid2">
-        <div><label>Card no.</label><input id="npCard"></div>
-        <div><label>Name</label><input id="npName"></div>
-        <div><label>PIN</label><input id="npPin" maxlength="8"></div>
-        <div><label>Initial time (min)</label><input id="npInit" type="number" value="60"></div>
-        <div><label>Policy</label><select id="npPolicy"></select></div>
-      </div>
-      <br><button class="btn blue" onclick="createPerson()">Create</button>
-      <button class="btn" onclick="hide('newPersonPanel')">Cancel</button>
-    </div>
-    <div class="panel" id="editPersonPanel" style="display:none">
-      <h3>Edit account <span id="epTitle" class="muted"></span></h3>
-      <div class="grid2">
-        <div><label>Name</label><input id="epName"></div>
-        <div><label>PIN (blank = unchanged)</label><input id="epPin"></div>
-        <div><label>Status</label><select id="epEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
-        <div><label>Policy</label><select id="epPolicy"></select></div>
-        <div><label>Adjust balance (min, negative = deduct)</label><input id="epDelta" type="number" placeholder="e.g. 30 or -15"></div>
-      </div>
-      <br><button class="btn blue" onclick="savePerson()">Save</button>
-      <button class="btn" onclick="hide('editPersonPanel')">Cancel</button>
-    </div>
-    <div class="toolbar"><button class="btn blue" onclick="show('newPersonPanel')">+ New account</button></div>
-    <div style="overflow-x:auto"><table id="personsTable"></table></div>
-  </section>
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb">TimeBank<span class="sep">/</span><span class="cur" id="crumb">Overview</span></div>
+      <div class="spacer"></div>
+      <div class="who"><span class="avatar">A</span>admin</div>
+      <button class="signout" onclick="logout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg>
+        Sign out
+      </button>
+    </header>
 
-  <!-- Requests -->
-  <section id="tab-requests">
-    <div style="overflow-x:auto"><table id="reqTable"></table></div>
-  </section>
+    <main>
+      <!-- Overview -->
+      <section id="tab-overview" class="active">
+        <div class="hero">
+          <div class="mark">∞</div>
+          <div>
+            <h2>willBeyond <b>TimeBank</b></h2>
+            <p>Time, well spent — every minute accounted for.</p>
+          </div>
+          <span class="chip">v2.1 · offline mode live</span>
+        </div>
 
-  <!-- Policies -->
-  <section id="tab-policies">
-    <div class="panel">
-      <h3>Policy editor</h3>
-      <div class="toolbar">
-        <select id="polSelect" style="width:auto" onchange="loadPolicyForm()"></select>
-        <button class="btn blue" onclick="newPolicy()">+ New</button>
-      </div>
-      <div class="grid2">
-        <div><label>Name</label><input id="polName"></div>
-        <div><label>Weekday daily quota (min, 0 = unlimited)</label><input id="polWd" type="number"></div>
-        <div><label>Weekend daily quota (min, 0 = unlimited)</label><input id="polWe" type="number"></div>
-        <div><label>Max session length (min, 0 = unlimited)</label><input id="polMax" type="number"></div>
-        <div><label>Sliding window length (min, 0 = off)</label><input id="polSw" type="number" placeholder="e.g. 120"></div>
-        <div><label>Max usage within window (min, 0 = off)</label><input id="polSq" type="number" placeholder="e.g. 45"></div>
-        <div><label>Offline quota (min, blank = default, 0 = no offline)</label><input id="polOff" type="number" placeholder="default"></div>
-        <div><label>Enabled</label><select id="polEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
-      </div>
-      <p class="muted" style="font-size:13px;margin-top:6px">Sliding window example: length 120 + quota 45 = at most 45 minutes of use within any rolling 2 hours (cross-session; old usage ages out automatically).</p>
-      <label>Allowed hours (outside = blocked; empty = all day)</label>
-      <div id="winRows"></div>
-      <button class="btn sm" onclick="addWinRow('','')">+ Add window</button>
-      <br><br><button class="btn blue" onclick="savePolicy()">Save policy</button>
-      <span id="polMsg" class="muted" style="margin-left:10px"></span>
-    </div>
-    <div style="overflow-x:auto"><table id="polTable"></table></div>
-  </section>
+        <div class="stats">
+          <div class="stat"><div class="lbl">Machines online</div><div class="num" id="ovOnline">-</div></div>
+          <div class="stat"><div class="lbl">Active sessions</div><div class="num" id="ovSessions">-</div></div>
+          <div class="stat click" onclick="switchTab('requests')"><div class="lbl">Pending requests</div><div class="num red" id="ovPending">-</div></div>
+          <div class="stat"><div class="lbl">Accounts</div><div class="num" id="ovAccounts">-</div></div>
+        </div>
 
-  <!-- Machines -->
-  <section id="tab-machines">
-    <div class="toolbar"><button class="btn blue" onclick="addMachine()">+ Register machine</button></div>
-    <div style="overflow-x:auto"><table id="machTable"></table></div>
-  </section>
+        <div class="cols">
+          <div class="card">
+            <div class="card-head"><h3>Recent sessions</h3><a class="link" onclick="switchTab('records')">All →</a></div>
+            <div class="wrap-x" id="ovRecent"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Pending requests</h3><a class="link" onclick="switchTab('requests')">Review →</a></div>
+            <div id="ovPendingList"></div>
+          </div>
+        </div>
 
-  <!-- Records -->
-  <section id="tab-records">
-    <div class="panel"><h3>Recent sessions</h3><div style="overflow-x:auto"><table id="sessTable"></table></div></div>
-  </section>
-</main>
+        <div class="quick">
+          <div class="q" onclick="switchTab('accounts');show('newPersonPanel')">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+            <div><b>New account</b><span>Create a card + PIN for a family member</span></div>
+          </div>
+          <div class="q" onclick="switchTab('requests')">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4.5 4.5L19 7"/></svg></div>
+            <div><b>Approve requests</b><span>Grant extra time with one tap</span></div>
+          </div>
+          <div class="q" onclick="switchTab('policies')">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h16M4 16h16"/><circle cx="9" cy="8" r="2.2"/><circle cx="15" cy="16" r="2.2"/></svg></div>
+            <div><b>Edit policies</b><span>Daily quotas, hours, sliding windows, offline</span></div>
+          </div>
+          <div class="q" onclick="switchTab('machines')">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+            <div><b>Machines</b><span>Register PCs, send lock / logoff / message</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Accounts -->
+      <section id="tab-accounts">
+        <div class="card" id="newPersonPanel" style="display:none">
+          <div class="card-head"><h3>New account</h3></div>
+          <div class="grid2">
+            <div><label>Card no.</label><input id="npCard"></div>
+            <div><label>Name</label><input id="npName"></div>
+            <div><label>PIN</label><input id="npPin" maxlength="8"></div>
+            <div><label>Initial time (min)</label><input id="npInit" type="number" value="60"></div>
+            <div><label>Policy</label><select id="npPolicy"></select></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary" onclick="createPerson()">Create</button>
+            <button class="btn" onclick="hide('newPersonPanel')">Cancel</button>
+          </div>
+        </div>
+
+        <div class="card" id="editPersonPanel" style="display:none">
+          <div class="card-head"><h3>Edit account <span class="soft" id="epTitle"></span></h3></div>
+          <div class="grid2">
+            <div><label>Name</label><input id="epName"></div>
+            <div><label>PIN (blank = unchanged)</label><input id="epPin"></div>
+            <div><label>Status</label><select id="epEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+            <div><label>Policy</label><select id="epPolicy"></select></div>
+            <div><label>Adjust balance (min, negative = deduct)</label><input id="epDelta" type="number" placeholder="e.g. 30 or -15"></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary" onclick="savePerson()">Save</button>
+            <button class="btn" onclick="hide('editPersonPanel')">Cancel</button>
+          </div>
+        </div>
+
+        <div class="toolbar"><button class="btn primary" onclick="show('newPersonPanel')">+ New account</button></div>
+        <div class="card"><div class="wrap-x"><table id="personsTable"></table></div></div>
+      </section>
+
+      <!-- Requests -->
+      <section id="tab-requests">
+        <div class="card"><div class="wrap-x"><table id="reqTable"></table></div></div>
+      </section>
+
+      <!-- Policies -->
+      <section id="tab-policies">
+        <div class="card">
+          <div class="card-head">
+            <h3>Policy editor</h3>
+            <a class="link" onclick="newPolicy()">+ New policy</a>
+          </div>
+          <div class="toolbar"><select id="polSelect" style="width:auto;min-width:240px" onchange="loadPolicyForm()"></select></div>
+          <div class="grid2">
+            <div><label>Name</label><input id="polName"></div>
+            <div><label>Weekday daily quota (min, 0 = unlimited)</label><input id="polWd" type="number"></div>
+            <div><label>Weekend daily quota (min, 0 = unlimited)</label><input id="polWe" type="number"></div>
+            <div><label>Max session length (min, 0 = unlimited)</label><input id="polMax" type="number"></div>
+            <div><label>Sliding window length (min, 0 = off)</label><input id="polSw" type="number" placeholder="e.g. 120"></div>
+            <div><label>Max usage within window (min, 0 = off)</label><input id="polSq" type="number" placeholder="e.g. 45"></div>
+            <div><label>Offline quota (min, blank = default, 0 = off)</label><input id="polOff" type="number" placeholder="default"></div>
+            <div><label>Enabled</label><select id="polEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+          </div>
+          <p class="hint">Sliding window example: length 120 + quota 45 = at most 45 minutes of use within any rolling 2 hours (cross-session; old usage ages out automatically).</p>
+          <label>Allowed hours (outside = blocked; empty = all day)</label>
+          <div id="winRows"></div>
+          <button class="btn sm" onclick="addWinRow('','')">+ Add window</button>
+          <div class="form-actions">
+            <button class="btn primary" onclick="savePolicy()">Save policy</button>
+            <span id="polMsg" class="soft" style="align-self:center"></span>
+          </div>
+        </div>
+        <div class="card"><div class="wrap-x"><table id="polTable"></table></div></div>
+      </section>
+
+      <!-- Machines -->
+      <section id="tab-machines">
+        <div class="toolbar"><button class="btn primary" onclick="addMachine()">+ Register machine</button></div>
+        <div class="card"><div class="wrap-x"><table id="machTable"></table></div></div>
+      </section>
+
+      <!-- Records -->
+      <section id="tab-records">
+        <div class="card">
+          <div class="card-head"><h3>Recent sessions</h3></div>
+          <div class="wrap-x"><table id="sessTable"></table></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -207,6 +408,15 @@ function fmtSec(s) {
 }
 function fmtTime(iso) { return iso ? new Date(iso).toLocaleString('en-GB', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'; }
 
+function reasonPill(r) {
+  if (!r) return '<span class="pill gray">-</span>';
+  let cls = 'gray';
+  if (r.startsWith('offline')) cls = 'amber';
+  else if (['exhausted', 'daily_quota', 'sliding_quota', 'curfew', 'session_limit', 'machine_off'].includes(r)) cls = 'red';
+  else if (r === 'logout') cls = 'gray';
+  return `<span class="pill ${cls}">${esc(r)}</span>`;
+}
+
 // ---------- auth ----------
 function showLogin() { localStorage.removeItem('tb_token'); token = ''; $('login').style.display = 'flex'; }
 async function doLogin() {
@@ -220,10 +430,12 @@ async function doLogin() {
 function logout() { showLogin(); }
 
 // ---------- tabs ----------
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+document.querySelectorAll('#nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+const TAB_LABEL = { overview: 'Overview', accounts: 'Accounts', requests: 'Requests', policies: 'Policies', machines: 'Machines', records: 'Records' };
 function switchTab(name) {
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+  $('crumb').textContent = TAB_LABEL[name] || name;
   if (name === 'overview') loadOverview();
   if (name === 'accounts') loadPersons();
   if (name === 'requests') loadRequests();
@@ -242,16 +454,32 @@ async function loadOverview() {
   $('ovOnline').textContent = `${online}/${d.machines.length}`;
   $('ovSessions').textContent = d.activeSessions.length;
   $('ovPending').textContent = d.pendingRequests;
+  $('ovAccounts').textContent = d.persons.length;
   const badge = $('reqBadge');
-  badge.style.display = d.pendingRequests > 0 ? 'inline' : 'none';
+  badge.style.display = d.pendingRequests > 0 ? 'inline-block' : 'none';
   badge.textContent = d.pendingRequests;
 
-  $('ovSessionList').innerHTML = d.activeSessions.length === 0 ? '<span class="muted">No one is signed in</span>' :
-    '<table><tr><th>Person</th><th>Machine</th><th>Started</th><th>Used</th></tr>' +
-    d.activeSessions.map(s => `<tr><td>${esc(s.person)}</td><td>${esc(s.machine)}</td><td>${fmtTime(s.startedAt)}</td><td>${fmtSec(s.chargedSeconds)}</td></tr>`).join('') + '</table>';
+  // recent sessions preview
+  try {
+    const ss = await api('GET', 'sessions?limit=5');
+    $('ovRecent').innerHTML = ss.length === 0 ? '<div class="empty">No sessions yet</div>' :
+      '<table><tr><th>Person</th><th>Machine</th><th>Started</th><th>Charged</th><th>Reason</th></tr>' +
+      ss.map(s => `<tr><td>${esc(s.person)}</td><td class="muted">${esc(s.machine)}</td>
+        <td class="soft">${fmtTime(s.startedAt)}</td><td>${fmtSec(s.chargedSeconds)}</td>
+        <td>${s.status === 'active' ? '<span class="pill green">active</span>' : reasonPill(s.endReason)}</td></tr>`).join('') + '</table>';
+  } catch { $('ovRecent').innerHTML = '<div class="empty">-</div>'; }
 
-  $('ovMachines').innerHTML = d.machines.map(m =>
-    `<div style="padding:6px 0"><span class="dot ${m.online ? 'on' : 'off'}"></span>${esc(m.name)} <span class="muted">· last heartbeat ${fmtTime(m.lastSeenAt)}</span></div>`).join('') || '<span class="muted">None</span>';
+  // pending requests preview
+  try {
+    const rs = await api('GET', 'requests?status=pending&limit=3');
+    $('ovPendingList').innerHTML = rs.length === 0 ? '<div class="empty">No pending requests</div>' :
+      rs.map(r => `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">
+        <div style="flex:1"><b style="font-size:13.5px">${esc(r.person)}</b>
+        <div class="soft" style="font-size:12px">${fmtTime(r.createdAt)}</div></div>
+        <span class="pill amber">+${r.minutes} min</span>
+        <button class="btn sm primary" onclick="decide(${r.id},true);event.stopPropagation()">Approve</button>
+      </div>`).join('');
+  } catch { $('ovPendingList').innerHTML = '<div class="empty">-</div>'; }
 }
 
 // ---------- accounts ----------
@@ -263,12 +491,12 @@ async function loadPersons() {
       <td>${esc(p.cardNo)}</td><td>${esc(p.displayName)}</td>
       <td class="balance">${fmtSec(p.balanceSeconds)}</td>
       <td class="muted">${esc(polMap[p.policyId] || p.policyId)}</td>
-      <td>${p.enabled ? '<span class="green">Enabled</span>' : '<span class="red">Disabled</span>'}</td>
-      <td><div class="row-actions">
-        <button class="btn sm green" onclick="grant(${p.id},900)">+15m</button>
-        <button class="btn sm green" onclick="grant(${p.id},1800)">+30m</button>
-        <button class="btn sm green" onclick="grant(${p.id},3600)">+1h</button>
-        <button class="btn sm red" onclick="grant(${p.id},-900)">-15m</button>
+      <td>${p.enabled ? '<span class="pill green">Enabled</span>' : '<span class="pill gray">Disabled</span>'}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn sm" onclick="grant(${p.id},900)">+15m</button>
+        <button class="btn sm" onclick="grant(${p.id},1800)">+30m</button>
+        <button class="btn sm" onclick="grant(${p.id},3600)">+1h</button>
+        <button class="btn sm danger" onclick="grant(${p.id},-900)">-15m</button>
         <button class="btn sm" onclick="editPerson(${p.id})">Edit</button>
       </div></td></tr>`).join('');
 }
@@ -313,12 +541,12 @@ async function createPerson() {
 // ---------- requests ----------
 async function loadRequests() {
   const rs = await api('GET', 'requests?status=pending&limit=50');
-  $('reqTable').innerHTML = rs.length === 0 ? '<tr><td class="muted">No pending requests</td></tr>' :
+  $('reqTable').innerHTML = rs.length === 0 ? '<tr><td class="empty">No pending requests</td></tr>' :
     '<tr><th>Person</th><th>Request</th><th>Time</th><th>Actions</th></tr>' +
-    rs.map(r => `<tr><td>${esc(r.person)}</td><td class="amber">+${r.minutes} min</td><td>${fmtTime(r.createdAt)}</td>
-      <td><div class="row-actions">
-        <button class="btn sm green" onclick="decide(${r.id},true)">Approve</button>
-        <button class="btn sm red" onclick="decide(${r.id},false)">Reject</button>
+    rs.map(r => `<tr><td><b>${esc(r.person)}</b></td><td><span class="pill amber">+${r.minutes} min</span></td><td class="soft">${fmtTime(r.createdAt)}</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn sm primary" onclick="decide(${r.id},true)">Approve</button>
+        <button class="btn sm danger" onclick="decide(${r.id},false)">Reject</button>
       </div></td></tr>`).join('');
 }
 
@@ -347,14 +575,14 @@ function renderPolTable() {
       const off = p.offlineQuotaSeconds === null || p.offlineQuotaSeconds === undefined ? 'default'
                 : p.offlineQuotaSeconds === 0 ? 'off' : fmtSec(p.offlineQuotaSeconds);
       return `<tr class="${editingPolicyId === p.id ? 'amber' : ''}" style="cursor:pointer" onclick="selectPolicy(${p.id})">
-        <td>${p.id}</td><td>${esc(p.name)}</td>
+        <td>${p.id}</td><td><b>${esc(p.name)}</b></td>
         <td>${p.weekdayQuotaSeconds ? fmtSec(p.weekdayQuotaSeconds) : 'unlimited'}</td>
         <td>${p.weekendQuotaSeconds ? fmtSec(p.weekendQuotaSeconds) : 'unlimited'}</td>
         <td>${p.maxSessionSeconds ? fmtSec(p.maxSessionSeconds) : 'unlimited'}</td>
         <td>${esc(sliding)}</td>
         <td>${esc(off)}</td>
-        <td class="muted">${esc(wins)}</td>
-        <td>${p.enabled ? '<span class="green">Enabled</span>' : '<span class="red">Disabled</span>'}</td></tr>`;
+        <td class="soft">${esc(wins)}</td>
+        <td>${p.enabled ? '<span class="pill green">Enabled</span>' : '<span class="pill gray">Disabled</span>'}</td></tr>`;
     }).join('');
 }
 
@@ -390,7 +618,7 @@ function newPolicy() {
 function addWinRow(start, end) {
   const div = document.createElement('div');
   div.className = 'winrow';
-  div.innerHTML = `<input type="time" value="${start}"> <span class="muted">to</span> <input type="time" value="${end === '24:00' ? '23:59' : end}"> <button class="btn sm red" onclick="this.parentNode.remove()">&times;</button>`;
+  div.innerHTML = `<input type="time" value="${start}"> <span class="muted">to</span> <input type="time" value="${end === '24:00' ? '23:59' : end}"> <button class="btn sm danger" onclick="this.parentNode.remove()">&times;</button>`;
   $('winRows').appendChild(div);
 }
 
@@ -418,16 +646,16 @@ async function savePolicy() {
 async function loadMachines() {
   const ms = await api('GET', 'machines');
   $('machTable').innerHTML = '<tr><th>ID</th><th>Name</th><th>Online</th><th>Last heartbeat</th><th>Actions</th></tr>' +
-    ms.map(m => `<tr><td>${m.id}</td><td>${esc(m.name)}</td>
-      <td>${m.online ? '<span class="green">Online</span>' : '<span class="muted">Offline</span>'}</td>
-      <td class="muted">${fmtTime(m.lastSeenAt)}</td>
-      <td><div class="row-actions">
-        <button class="btn sm amber" onclick="cmd(${m.id},'lock')">Lock</button>
-        <button class="btn sm green" onclick="cmd(${m.id},'unlock')">Unlock</button>
+    ms.map(m => `<tr><td class="soft">${m.id}</td><td><b>${esc(m.name)}</b></td>
+      <td>${m.online ? '<span class="pill green">Online</span>' : '<span class="pill gray">Offline</span>'}</td>
+      <td class="soft">${fmtTime(m.lastSeenAt)}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn sm" onclick="cmd(${m.id},'lock')">Lock</button>
+        <button class="btn sm" onclick="cmd(${m.id},'unlock')">Unlock</button>
         <button class="btn sm" onclick="cmd(${m.id},'logoff')">Logoff</button>
         <button class="btn sm" onclick="cmd(${m.id},'message')">Message</button>
-        <button class="btn sm red" onclick="cmd(${m.id},'shutdown')">Shutdown</button>
-        <button class="btn sm red" onclick="cmd(${m.id},'reboot')">Reboot</button>
+        <button class="btn sm danger" onclick="cmd(${m.id},'shutdown')">Shutdown</button>
+        <button class="btn sm danger" onclick="cmd(${m.id},'reboot')">Reboot</button>
         <button class="btn sm" onclick="delMachine(${m.id},'${esc(m.name)}')">Delete</button>
       </div></td></tr>`).join('');
 }
@@ -458,9 +686,9 @@ async function delMachine(id, name) {
 async function loadRecords() {
   const ss = await api('GET', 'sessions?limit=50');
   $('sessTable').innerHTML = '<tr><th>Person</th><th>Machine</th><th>Started</th><th>Ended</th><th>Charged</th><th>Reason</th></tr>' +
-    ss.map(s => `<tr><td>${esc(s.person)}</td><td>${esc(s.machine)}</td><td>${fmtTime(s.startedAt)}</td>
-      <td>${s.status === 'active' ? '<span class="green">active</span>' : fmtTime(s.endedAt)}</td>
-      <td>${fmtSec(s.chargedSeconds)}</td><td class="muted">${esc(s.endReason || '-')}</td></tr>`).join('');
+    ss.map(s => `<tr><td><b>${esc(s.person)}</b></td><td class="muted">${esc(s.machine)}</td><td class="soft">${fmtTime(s.startedAt)}</td>
+      <td class="soft">${s.status === 'active' ? '<span class="pill green">active</span>' : fmtTime(s.endedAt)}</td>
+      <td>${fmtSec(s.chargedSeconds)}</td><td>${reasonPill(s.endReason)}</td></tr>`).join('');
 }
 
 // ---------- boot ----------
