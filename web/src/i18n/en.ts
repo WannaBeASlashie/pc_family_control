@@ -47,6 +47,14 @@ export default {
   login: {
     title: 'Admin Console',
     subtitle: 'Sign in to manage family time',
+    slogan: 'Time, well spent.',
+    sloganSub: 'Every minute accounted for.',
+    ecosystem: 'WillBeyond Ecosystem',
+    current: 'Current',
+    productEverything: 'Everything · Home inventory',
+    productTimeBank: 'TimeBank · Family time',
+    moreProducts: 'More products planned',
+    footer: 'WillBeyond Ecosystem · TimeBank',
     wrongPassword: 'Wrong password',
     failed: 'Sign in failed'
   },

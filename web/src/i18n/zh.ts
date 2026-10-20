@@ -47,6 +47,14 @@ export default {
   login: {
     title: '管理控制台',
     subtitle: '登录以管理家庭上网时间',
+    slogan: '时间有度',
+    sloganSub: '每一分钟都有账可查。',
+    ecosystem: 'WillBeyond 生态',
+    current: '当前',
+    productEverything: 'Everything · 万物管家',
+    productTimeBank: 'TimeBank · 家庭时间',
+    moreProducts: '更多产品规划中',
+    footer: 'WillBeyond 生态 · TimeBank',
     wrongPassword: '密码错误',
     failed: '登录失败'
   },

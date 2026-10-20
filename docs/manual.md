@@ -455,6 +455,7 @@ dotnet ef migrations add <名称> --project src/server/TimeBank.Server
 
 管理控制台（`web/`）：Vue 3 + TypeScript + Vite + vue-router（history 模式，服务端 `MapFallback` 回 index.html）。
 **UI 库与 Everything 完全同栈**：Element Plus 2.9 + 共享设计系统 `web/src/styles/brand.css`（天空蓝 #0ea5e9、18px 圆角、el-* 主题覆盖）+ `WbLogo` 品牌组件；应用层补充样式在 `app.css`。
+**登录页复用生态标准外壳**：`WbAuthShell`（左品牌区 + 生态产品列表 + 右表单插槽 + 语言切换）连同 `brand.config.ts`、`components/index.ts` 按 `willBeyondEverything/docs/06-生态组件复用指引.md` 的**方式 A（源文件复制）**落地；外壳不含认证逻辑，登录表单通过 `#form` 插槽注入。
 **国际化**：控制台支持中文 / English 切换（右上角，`localStorage` 持久化，默认跟随浏览器语言；Element Plus 组件语言同步切换）。语言包在 `web/src/i18n/en.ts`、`zh.ts`。
 Docker 构建为多阶段（node 构建前端 → dotnet 发布 → 运行时镜像）；本地开发用 Vite 代理避免 CORS。
 Windows PowerShell 下 npm 用 `npm.cmd`（`npm.ps1` 受执行策略限制）。

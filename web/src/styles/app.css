@@ -90,42 +90,28 @@
 .list-empty { color: #909399; padding: 12px 0; font-size: 13px; }
 
 /* ---------- 登录 ---------- */
-.login-screen {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--wb-bg);
-}
 .login-card {
-  width: 340px;
-  padding: 8px 4px 18px;
-}
-.login-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: center;
-  margin: 10px 0 4px;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  padding: 26px 22px 20px;
 }
 .login-title {
-  text-align: center;
+  text-align: left;
   color: var(--wb-ink);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
-  margin-top: 14px;
 }
 .login-sub {
-  text-align: center;
+  text-align: left;
   color: #8aa4bd;
   font-size: 12px;
-  margin: 4px 0 18px;
+  margin: 6px 0 20px;
 }
 .login-err {
   color: #ef4444;
   font-size: 12.5px;
   margin-top: 8px;
-  text-align: center;
+  text-align: left;
   min-height: 18px;
 }
 
