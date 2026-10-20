@@ -1,4 +1,6 @@
-# HomeCtrl 家庭电脑管控
+# willBeyond TimeBank · 时光银行
+
+家庭电脑时间管控系统 —— 时间即货币：开户、充值、消费、审批、对账。
 
 参考万象网管的「锁屏 → 刷卡上机 → 计时 → 下机」模式，面向家庭儿童场景的局域网电脑管控系统。
 
@@ -17,7 +19,7 @@
 ```
 家庭服务器(Docker)                          受控机 ×3 (Win10 Pro)
 ┌──────────────────────┐   HTTP+HMAC    ┌──────────────────────────┐
-│ HomeCtrl.Server       │◄──────────────►│ Agent (SYSTEM 服务)       │
+│ TimeBank.Server       │◄──────────────►│ Agent (SYSTEM 服务)       │
 │ API/计费/指令/SQLite   │               │   ▲ 命名管道 IPC          │
 └──────────▲───────────┘                │   │                       │
            │ 浏览器                      │ LockScreen UI (WPF 锁屏)  │
@@ -28,9 +30,9 @@
 
 ```
 docs/                    需求与设计文档
-src/server/HomeCtrl.Server     服务端（ASP.NET Core 8 + EF Core + SQLite）
-src/client/HomeCtrl.Agent      客户端服务（Worker Service, SYSTEM）
-src/client/HomeCtrl.LockScreen 锁屏 UI（WPF）
+src/server/TimeBank.Server     服务端（ASP.NET Core 8 + EF Core + SQLite）
+src/client/TimeBank.Agent      客户端服务（Worker Service, SYSTEM）
+src/client/TimeBank.LockScreen 锁屏 UI（WPF）
 scripts/install-client.ps1     客户端一键安装（含服务名伪装）
 docker-compose.yml             服务端部署
 ```
@@ -40,13 +42,13 @@ docker-compose.yml             服务端部署
 ### 1. 服务端（家庭服务器，需 Docker）
 
 ```bash
-docker compose up -d --build      # 端口 8080，数据在 ./data/homectrl.db
+docker compose up -d --build      # 端口 8080，数据在 ./data/timebank.db
 ```
 
 开发模式（本机 .NET 8 SDK）：
 
 ```bash
-cd src/server/HomeCtrl.Server
+cd src/server/TimeBank.Server
 dotnet run
 ```
 
@@ -170,7 +172,7 @@ powershell -ExecutionPolicy Bypass -File scripts\demo-ui.ps1
 
 ```bash
 dotnet tool install --global dotnet-ef --version 8.*   # 首次
-dotnet ef migrations add <名称> --project src/server/HomeCtrl.Server
+dotnet ef migrations add <名称> --project src/server/TimeBank.Server
 ```
 
 ## 路线图
@@ -185,4 +187,4 @@ P3：Kiosk/安全桌面加固、进程守卫
 - 首次部署务必修改 `Admin__Password` 环境变量
 - 机器 `secret` 等同于该机的钥匙，勿外泄
 - 服务端仅限局域网访问，勿映射到公网（P0 为明文 HTTP）
-- `data/homectrl.db` 是全部数据，定期备份（直接拷文件）
+- `data/timebank.db` 是全部数据，定期备份（直接拷文件）

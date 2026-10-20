@@ -1,4 +1,4 @@
-# HomeCtrl end-to-end test: run the REAL Agent binary against the server,
+# TimeBank end-to-end test: run the REAL Agent binary against the server,
 # talk to it over the named pipe (same protocol as the WPF UI).
 #   create machine -> start agent -> heartbeat seen -> pipe getState
 #   -> pipe login (real person) -> pipe getState (unlocked) -> pipe logout
@@ -17,10 +17,10 @@ function Check([string]$name, [bool]$cond) {
     else       { $script:fail++; Write-Host "  [FAIL] $name" -ForegroundColor Red }
 }
 
-# Kill leftover test agents (started as dotnet.exe, process name is NOT HomeCtrl.Agent!)
+# Kill leftover test agents (started as dotnet.exe, process name is NOT TimeBank.Agent!)
 function Stop-TestAgents {
     Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
-        Where-Object { $_.CommandLine -match "HomeCtrl\.Agent" } |
+        Where-Object { $_.CommandLine -match "TimeBank\.Agent" } |
         ForEach-Object { Write-Host "  killing leftover agent pid=$($_.ProcessId)"; Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
@@ -30,7 +30,7 @@ function Stop-TestAgents {
 function Pipe-Call([string]$cmd, [hashtable]$extra = $null) {
     $pipe = $null
     try {
-        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", "homectrl.agent", [System.IO.Pipes.PipeDirection]::InOut)
+        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", "timebank.agent", [System.IO.Pipes.PipeDirection]::InOut)
         $pipe.Connect(5000)
         $writer = [System.IO.StreamWriter]::new($pipe, [System.Text.Encoding]::UTF8)
         $writer.AutoFlush = $true
@@ -70,7 +70,7 @@ $env:Server__BaseUrl = $Server
 $env:Server__MachineId = "$($mach.id)"
 $env:Server__Secret = $mach.secret
 $env:HeartbeatSeconds = "3"
-$agent = Start-Process -FilePath $Dotnet -ArgumentList @("$PSScriptRoot\..\src\client\HomeCtrl.Agent\bin\Debug\net8.0\HomeCtrl.Agent.dll") -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\agent-out.log" -RedirectStandardError "$env:TEMP\agent-err.log"
+$agent = Start-Process -FilePath $Dotnet -ArgumentList @("$PSScriptRoot\..\src\client\TimeBank.Agent\bin\Debug\net8.0\TimeBank.Agent.dll") -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\agent-out.log" -RedirectStandardError "$env:TEMP\agent-err.log"
 Write-Host "  agent pid=$($agent.Id), waiting for pipe..."
 
 try {

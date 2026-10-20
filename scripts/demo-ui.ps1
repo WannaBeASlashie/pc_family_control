@@ -1,4 +1,4 @@
-# HomeCtrl UI demo: prepare test data on the server, start the REAL Agent,
+# TimeBank UI demo: prepare test data on the server, start the REAL Agent,
 # then launch the LockScreen UI in TEST mode (ESC exits - dev machine only).
 # Test mode is enabled ONLY by the HOMECTRL_TEST=1 env var; the installed
 # client never sets it, so production locks stay non-closable.
@@ -49,7 +49,7 @@ Write-Host "person : card=$CardNo pin=$Pin balance=$($acct.balanceSeconds)s"
 # (ESC only closes the UI; without logout the session would resume unlocked on restart)
 function Try-PipeLogout {
     try {
-        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", "homectrl.agent", [System.IO.Pipes.PipeDirection]::InOut)
+        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", "timebank.agent", [System.IO.Pipes.PipeDirection]::InOut)
         try {
             $pipe.Connect(1500)
             $writer = [System.IO.StreamWriter]::new($pipe, [System.Text.Encoding]::UTF8)
@@ -64,9 +64,9 @@ function Try-PipeLogout {
 }
 Try-PipeLogout
 
-Get-Process HomeCtrl.LockScreen -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process TimeBank.LockScreen -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
-    Where-Object { $_.CommandLine -match "HomeCtrl\.Agent" } |
+    Where-Object { $_.CommandLine -match "TimeBank\.Agent" } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep 1
 
@@ -75,20 +75,20 @@ $env:Server__BaseUrl = $Server
 $env:Server__MachineId = "$($mach.id)"
 $env:Server__Secret = $mach.secret
 $env:HeartbeatSeconds = "3"
-$agent = Start-Process -FilePath $Dotnet -ArgumentList @("$PSScriptRoot\..\src\client\HomeCtrl.Agent\bin\Debug\net8.0\HomeCtrl.Agent.dll") -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\demo-agent-out.log" -RedirectStandardError "$env:TEMP\demo-agent-err.log"
+$agent = Start-Process -FilePath $Dotnet -ArgumentList @("$PSScriptRoot\..\src\client\TimeBank.Agent\bin\Debug\net8.0\TimeBank.Agent.dll") -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\demo-agent-out.log" -RedirectStandardError "$env:TEMP\demo-agent-err.log"
 Write-Host "agent  : pid=$($agent.Id)"
 
 # --- wait for the agent pipe ---
 $up = $false
 for ($i = 0; $i -lt 20; $i++) {
     Start-Sleep -Milliseconds 500
-    if ([System.IO.Directory]::GetFiles("\\.\pipe\") -contains "\\.\pipe\homectrl.agent") { $up = $true; break }
+    if ([System.IO.Directory]::GetFiles("\\.\pipe\") -contains "\\.\pipe\timebank.agent") { $up = $true; break }
 }
 if (-not $up) { throw "agent pipe did not come up (see $env:TEMP\demo-agent-err.log)" }
 
 # --- launch UI in TEST mode ---
 $env:HOMECTRL_TEST = "1"
-$ui = Start-Process -FilePath "$PSScriptRoot\..\src\client\HomeCtrl.LockScreen\bin\Debug\net8.0-windows\HomeCtrl.LockScreen.exe" -PassThru
+$ui = Start-Process -FilePath "$PSScriptRoot\..\src\client\TimeBank.LockScreen\bin\Debug\net8.0-windows\TimeBank.LockScreen.exe" -PassThru
 $env:HOMECTRL_TEST = $null
 
 Write-Host ""

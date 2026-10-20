@@ -1,4 +1,4 @@
-# HomeCtrl agent command-execution test: run the REAL Agent binary, then drive
+# TimeBank agent command-execution test: run the REAL Agent binary, then drive
 # it through admin commands (the paths HeartbeatWorker.ExecuteCommandAsync runs):
 #   lock -> unlock -> message -> UI watchdog auto-logout
 # NOTE: logoff/shutdown/reboot are destructive and NOT tested here (need a VM).
@@ -19,14 +19,14 @@ function Check([string]$name, [bool]$cond) {
 
 function Stop-TestAgents {
     Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
-        Where-Object { $_.CommandLine -match "HomeCtrl\.Agent" } |
+        Where-Object { $_.CommandLine -match "TimeBank\.Agent" } |
         ForEach-Object { Write-Host "  killing leftover agent pid=$($_.ProcessId)"; Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
 function Pipe-Call([string]$cmd, [hashtable]$extra = $null) {
     $pipe = $null
     try {
-        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", "homectrl.agent", [System.IO.Pipes.PipeDirection]::InOut)
+        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", "timebank.agent", [System.IO.Pipes.PipeDirection]::InOut)
         $pipe.Connect(5000)
         $writer = [System.IO.StreamWriter]::new($pipe, [System.Text.Encoding]::UTF8)
         $writer.AutoFlush = $true
@@ -84,7 +84,7 @@ $env:Server__MachineId = "$($mach.id)"
 $env:Server__Secret = $mach.secret
 $env:HeartbeatSeconds = "3"
 $env:UiWatchdogSeconds = "15"
-$agent = Start-Process -FilePath $Dotnet -ArgumentList @("$PSScriptRoot\..\src\client\HomeCtrl.Agent\bin\Debug\net8.0\HomeCtrl.Agent.dll") -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\agent-cmd-out.log" -RedirectStandardError "$env:TEMP\agent-cmd-err.log"
+$agent = Start-Process -FilePath $Dotnet -ArgumentList @("$PSScriptRoot\..\src\client\TimeBank.Agent\bin\Debug\net8.0\TimeBank.Agent.dll") -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\agent-cmd-out.log" -RedirectStandardError "$env:TEMP\agent-cmd-err.log"
 Write-Host "  agent pid=$($agent.Id)"
 
 try {

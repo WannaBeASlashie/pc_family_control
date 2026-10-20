@@ -1,0 +1,47 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{71C1C4B8-AF5B-4E7B-88ED-DB94CFF18AE0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "server", "server", "{C867981C-7CC8-443D-8CDC-1A1E67396FDE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimeBank.Server", "src\server\TimeBank.Server\TimeBank.Server.csproj", "{15098941-4C48-4B0A-969F-7031DB89DCDA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client", "client", "{CA3E9CF6-8D70-4830-825C-7B07DF114EC9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimeBank.Agent", "src\client\TimeBank.Agent\TimeBank.Agent.csproj", "{96B51783-B5DE-4E3A-8AFD-E95A60BA9401}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimeBank.LockScreen", "src\client\TimeBank.LockScreen\TimeBank.LockScreen.csproj", "{C94434B9-58E4-4D5A-A067-4CC196CA3741}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{15098941-4C48-4B0A-969F-7031DB89DCDA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{15098941-4C48-4B0A-969F-7031DB89DCDA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{15098941-4C48-4B0A-969F-7031DB89DCDA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{15098941-4C48-4B0A-969F-7031DB89DCDA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96B51783-B5DE-4E3A-8AFD-E95A60BA9401}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96B51783-B5DE-4E3A-8AFD-E95A60BA9401}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96B51783-B5DE-4E3A-8AFD-E95A60BA9401}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96B51783-B5DE-4E3A-8AFD-E95A60BA9401}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C94434B9-58E4-4D5A-A067-4CC196CA3741}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C94434B9-58E4-4D5A-A067-4CC196CA3741}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C94434B9-58E4-4D5A-A067-4CC196CA3741}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C94434B9-58E4-4D5A-A067-4CC196CA3741}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C867981C-7CC8-443D-8CDC-1A1E67396FDE} = {71C1C4B8-AF5B-4E7B-88ED-DB94CFF18AE0}
+		{15098941-4C48-4B0A-969F-7031DB89DCDA} = {C867981C-7CC8-443D-8CDC-1A1E67396FDE}
+		{CA3E9CF6-8D70-4830-825C-7B07DF114EC9} = {71C1C4B8-AF5B-4E7B-88ED-DB94CFF18AE0}
+		{96B51783-B5DE-4E3A-8AFD-E95A60BA9401} = {CA3E9CF6-8D70-4830-825C-7B07DF114EC9}
+		{C94434B9-58E4-4D5A-A067-4CC196CA3741} = {CA3E9CF6-8D70-4830-825C-7B07DF114EC9}
+	EndGlobalSection
+EndGlobal

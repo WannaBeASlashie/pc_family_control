@@ -1,13 +1,13 @@
 services:
-  homectrl:
-    build: ./src/server/HomeCtrl.Server
-    container_name: homectrl
+  timebank:
+    build: ./src/server/TimeBank.Server
+    container_name: timebank
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
       - Admin__Password=changeme            # 家长管理密码，务必修改
-      - ConnectionStrings__Default=Data Source=/data/homectrl.db
+      - ConnectionStrings__Default=Data Source=/data/timebank.db
       - Policy__GraceSeconds=300            # 余额耗尽后的宽限期（秒）
       - Policy__TzOffsetHours=8             # 策略日期/时段的时区偏移（小时，中国=8）
       - Offline__Enabled=true               # 离线额度总开关

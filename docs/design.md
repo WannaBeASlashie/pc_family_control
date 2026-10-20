@@ -1,4 +1,4 @@
-# HomeCtrl 设计文档
+# TimeBank 设计文档
 
 > v0.1 ｜ 2026-10-20 ｜ 配套需求见 [requirements.md](requirements.md)
 
@@ -23,13 +23,13 @@
 
 | 组件 | 技术 | 运行身份 | 职责 |
 |---|---|---|---|
-| `HomeCtrl.Server` | ASP.NET Core 8 Minimal API + EF Core + SQLite | Docker（家庭服务器） | 唯一权威：账户、余额、会话、计费、指令队列、审计 |
-| `HomeCtrl.Agent` | .NET Worker Service | Windows 服务（SYSTEM） | 心跳上报、执行指令（锁定/解锁/注销/关机/消息）、与 UI 的 IPC |
-| `HomeCtrl.LockScreen` | WPF | 用户会话（共享账户开机自启） | 全屏锁屏、上机认证、剩余时间组件、下机按钮 |
+| `TimeBank.Server` | ASP.NET Core 8 Minimal API + EF Core + SQLite | Docker（家庭服务器） | 唯一权威：账户、余额、会话、计费、指令队列、审计 |
+| `TimeBank.Agent` | .NET Worker Service | Windows 服务（SYSTEM） | 心跳上报、执行指令（锁定/解锁/注销/关机/消息）、与 UI 的 IPC |
+| `TimeBank.LockScreen` | WPF | 用户会话（共享账户开机自启） | 全屏锁屏、上机认证、剩余时间组件、下机按钮 |
 
 ```
 ┌─────────────────────────────  家庭服务器（Docker）─────────────────────────────┐
-│  HomeCtrl.Server   API + 计费 + 指令队列 + SQLite                            │
+│  TimeBank.Server   API + 计费 + 指令队列 + SQLite                            │
 └───────▲───────────────────────────────────────────────────────────▲──────────┘
         │ HTTP + HMAC（局域网）                                       │ HTTP（家长浏览器）
 ┌───────┴──────────┐  ┌──────────────┐      ┌──────────────┐  ┌────┴─────────┐
@@ -254,7 +254,7 @@ CREATE TABLE audit_log (
 | GET | `/api/admin/sessions?limit=` | 会话记录 |
 | GET | `/api/admin/audit?limit=` | 审计日志 |
 
-## 7. IPC 协议（命名管道 `homectrl.agent`，UTF-8 JSON 行）
+## 7. IPC 协议（命名管道 `timebank.agent`，UTF-8 JSON 行）
 
 请求（UI → Agent）：
 
@@ -289,7 +289,7 @@ Agent 内部状态机：`locked = session==null || balance<=0 || adminLock`（ad
 
 ```bash
 # 仓库根目录
-docker compose up -d --build     # 端口 8080，数据在 ./data/homectrl.db
+docker compose up -d --build     # 端口 8080，数据在 ./data/timebank.db
 ```
 
 ### 客户端（每台受控机）

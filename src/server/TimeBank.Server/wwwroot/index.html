@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>时光银行 · 家长控制台</title>
+<style>
+  :root {
+    --bg:#0e1420; --panel:#161d2e; --panel2:#1a2233; --border:#2a3550;
+    --text:#e8ecf4; --muted:#8a93a8; --blue:#3b82f6; --green:#34d399;
+    --red:#ef4444; --amber:#f59e0b; --radius:10px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; font-size:15px; }
+  header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:20; }
+  header h1 { font-size:18px; flex:1; }
+  nav { display:flex; gap:6px; padding:10px 14px; overflow-x:auto; border-bottom:1px solid var(--border); background:var(--bg); position:sticky; top:57px; z-index:19; }
+  nav button { border:none; background:transparent; color:var(--muted); padding:8px 14px; border-radius:8px; cursor:pointer; font-size:15px; white-space:nowrap; }
+  nav button.active { background:var(--panel2); color:var(--text); }
+  nav .badge { background:var(--amber); color:#1a1200; border-radius:9px; padding:0 6px; font-size:12px; margin-left:4px; font-weight:bold; }
+  main { padding:16px; max-width:980px; margin:0 auto; }
+  section { display:none; }
+  section.active { display:block; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
+  .card .num { font-size:26px; font-weight:bold; }
+  .card .lbl { color:var(--muted); font-size:13px; margin-top:2px; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 20px; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); font-size:14px; vertical-align:middle; }
+  th { color:var(--muted); font-weight:500; font-size:13px; }
+  .btn { border:none; border-radius:7px; padding:7px 12px; cursor:pointer; font-size:13px; background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+  .btn:hover { filter:brightness(1.2); }
+  .btn.blue { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.green { background:var(--green); border-color:var(--green); color:#062; }
+  .btn.red { background:var(--red); border-color:var(--red); color:#fff; }
+  .btn.amber { background:var(--amber); border-color:var(--amber); color:#1a1200; }
+  .btn.sm { padding:4px 8px; font-size:12px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+  .panel h3 { font-size:15px; margin-bottom:12px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
+  label { display:block; color:var(--muted); font-size:13px; margin:8px 0 4px; }
+  input, select { width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:9px 10px; font-size:15px; }
+  input[type=checkbox] { width:auto; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+  .dot.on { background:var(--green); } .dot.off { background:#555; }
+  .muted { color:var(--muted); } .green { color:var(--green); } .red { color:var(--red); } .amber { color:var(--amber); }
+  .row-actions { display:flex; gap:4px; flex-wrap:wrap; }
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--panel2); border:1px solid var(--border); padding:10px 20px; border-radius:8px; display:none; z-index:99; }
+  #login { position:fixed; inset:0; background:var(--bg); display:none; align-items:center; justify-content:center; z-index:50; }
+  #login .box { width:300px; }
+  #login h2 { text-align:center; margin-bottom:16px; }
+  .winrow { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .winrow input { flex:1; }
+  .toolbar { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center; }
+  .balance { font-family:Consolas,monospace; font-weight:bold; color:var(--green); }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="box panel">
+    <h2>🏠 时光银行</h2>
+    <label>家长密码</label>
+    <input type="password" id="pwd" autofocus>
+    <br><br>
+    <button class="btn blue" style="width:100%" onclick="doLogin()">登 录</button>
+    <p id="loginErr" class="red" style="margin-top:8px;text-align:center"></p>
+  </div>
+</div>
+
+<header>
+  <h1>🕰 时光银行 · 家长控制台</h1>
+  <span id="hdBadge"></span>
+  <button class="btn" onclick="logout()">退出</button>
+</header>
+
+<nav id="nav">
+  <button data-tab="overview" class="active">总览</button>
+  <button data-tab="accounts">账户</button>
+  <button data-tab="requests">审批<span id="reqBadge" class="badge" style="display:none"></span></button>
+  <button data-tab="policies">策略</button>
+  <button data-tab="machines">机器</button>
+  <button data-tab="records">记录</button>
+</nav>
+
+<main>
+  <!-- 总览 -->
+  <section id="tab-overview" class="active">
+    <div class="cards">
+      <div class="card"><div class="num" id="ovOnline">-</div><div class="lbl">机器在线</div></div>
+      <div class="card"><div class="num" id="ovSessions">-</div><div class="lbl">正在上机</div></div>
+      <div class="card"><div class="num amber" id="ovPending" style="cursor:pointer" onclick="switchTab('requests')">-</div><div class="lbl">待审批</div></div>
+    </div>
+    <div class="panel"><h3>正在上机</h3><div id="ovSessionList" class="muted">无人使用</div></div>
+    <div class="panel"><h3>机器</h3><div id="ovMachines" class="muted"></div></div>
+  </section>
+
+  <!-- 账户 -->
+  <section id="tab-accounts">
+    <div class="panel" id="newPersonPanel" style="display:none">
+      <h3>新建账户</h3>
+      <div class="grid2">
+        <div><label>卡号</label><input id="npCard"></div>
+        <div><label>姓名</label><input id="npName"></div>
+        <div><label>PIN</label><input id="npPin" maxlength="8"></div>
+        <div><label>初始时长（分钟）</label><input id="npInit" type="number" value="60"></div>
+        <div><label>策略</label><select id="npPolicy"></select></div>
+      </div>
+      <br><button class="btn blue" onclick="createPerson()">创建</button>
+      <button class="btn" onclick="hide('newPersonPanel')">取消</button>
+    </div>
+    <div class="panel" id="editPersonPanel" style="display:none">
+      <h3>编辑账户 <span id="epTitle" class="muted"></span></h3>
+      <div class="grid2">
+        <div><label>姓名</label><input id="epName"></div>
+        <div><label>PIN（留空不改）</label><input id="epPin"></div>
+        <div><label>状态</label><select id="epEnabled"><option value="true">启用</option><option value="false">停用</option></select></div>
+        <div><label>策略</label><select id="epPolicy"></select></div>
+        <div><label>调整余额（分钟，负数为扣减）</label><input id="epDelta" type="number" placeholder="如 30 或 -15"></div>
+      </div>
+      <br><button class="btn blue" onclick="savePerson()">保存</button>
+      <button class="btn" onclick="hide('editPersonPanel')">取消</button>
+    </div>
+    <div class="toolbar"><button class="btn blue" onclick="show('newPersonPanel')">＋ 新建账户</button></div>
+    <div style="overflow-x:auto"><table id="personsTable"></table></div>
+  </section>
+
+  <!-- 审批 -->
+  <section id="tab-requests">
+    <div style="overflow-x:auto"><table id="reqTable"></table></div>
+  </section>
+
+  <!-- 策略 -->
+  <section id="tab-policies">
+    <div class="panel">
+      <h3>策略编辑</h3>
+      <div class="toolbar">
+        <select id="polSelect" style="width:auto" onchange="loadPolicyForm()"></select>
+        <button class="btn blue" onclick="newPolicy()">＋ 新建</button>
+      </div>
+      <div class="grid2">
+        <div><label>名称</label><input id="polName"></div>
+        <div><label>工作日每日额度（分钟，0 不限）</label><input id="polWd" type="number"></div>
+        <div><label>周末每日额度（分钟，0 不限）</label><input id="polWe" type="number"></div>
+        <div><label>单次连续上限（分钟，0 不限）</label><input id="polMax" type="number"></div>
+        <div><label>滑动窗口长度（分钟，0 不启用）</label><input id="polSw" type="number" placeholder="如 120"></div>
+        <div><label>窗口内最大用时（分钟，0 不启用）</label><input id="polSq" type="number" placeholder="如 45"></div>
+        <div><label>离线额度（分钟，空=全局默认，0=禁止离线）</label><input id="polOff" type="number" placeholder="默认"></div>
+        <div><label>启用</label><select id="polEnabled"><option value="true">启用</option><option value="false">停用</option></select></div>
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:6px">滑动窗口示例：长度 120、限额 45 = 最近 2 小时内最多累计上机 45 分钟（跨会话累计，到量锁定，窗口滑过旧用量后自动恢复）。</p>
+      <label>可用时段（时段外=宵禁，空=全天）</label>
+      <div id="winRows"></div>
+      <button class="btn sm" onclick="addWinRow('','')">＋ 添加时段</button>
+      <br><br><button class="btn blue" onclick="savePolicy()">保存策略</button>
+      <span id="polMsg" class="muted" style="margin-left:10px"></span>
+    </div>
+    <div style="overflow-x:auto"><table id="polTable"></table></div>
+  </section>
+
+  <!-- 机器 -->
+  <section id="tab-machines">
+    <div class="toolbar"><button class="btn blue" onclick="addMachine()">＋ 注册新机器</button></div>
+    <div style="overflow-x:auto"><table id="machTable"></table></div>
+  </section>
+
+  <!-- 记录 -->
+  <section id="tab-records">
+    <div class="panel"><h3>最近会话</h3><div style="overflow-x:auto"><table id="sessTable"></table></div></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+let token = localStorage.getItem('hc_token') || '';
+let policies = [];
+let editingPersonId = null;
+let editingPolicyId = null;
+let pollTimer = null;
+
+// ---------- 基础 ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const show = id => $(id).style.display = 'block';
+const hide = id => $(id).style.display = 'none';
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 2500); }
+
+async function api(method, path, body) {
+  const res = await fetch('/api/admin/' + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  if (res.status === 401) { showLogin(); throw new Error('未登录'); }
+  return res.json();
+}
+
+function fmtSec(s) {
+  if (s === null || s === undefined) return '-';
+  s = Math.max(0, s);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return h > 0 ? `${h}小时${m}分` : `${m}分${s % 60}秒`;
+}
+function fmtTime(iso) { return iso ? new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'; }
+
+// ---------- 登录 ----------
+function showLogin() { localStorage.removeItem('hc_token'); token = ''; $('login').style.display = 'flex'; }
+async function doLogin() {
+  const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: $('pwd').value }) });
+  if (!r.ok) { $('loginErr').textContent = '密码错误'; return; }
+  token = (await r.json()).token;
+  localStorage.setItem('hc_token', token);
+  $('login').style.display = 'none'; $('loginErr').textContent = '';
+  refreshAll();
+}
+function logout() { showLogin(); }
+
+// ---------- Tab ----------
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+function switchTab(name) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+  if (name === 'overview') loadOverview();
+  if (name === 'accounts') loadPersons();
+  if (name === 'requests') loadRequests();
+  if (name === 'policies') loadPolicies();
+  if (name === 'machines') loadMachines();
+  if (name === 'records') loadRecords();
+}
+
+function refreshAll() { loadOverview(); }
+
+// ---------- 总览 ----------
+async function loadOverview() {
+  let d;
+  try { d = await api('GET', 'overview'); } catch { return; }
+  const online = d.machines.filter(m => m.online).length;
+  $('ovOnline').textContent = `${online}/${d.machines.length}`;
+  $('ovSessions').textContent = d.activeSessions.length;
+  $('ovPending').textContent = d.pendingRequests;
+  const badge = $('reqBadge');
+  badge.style.display = d.pendingRequests > 0 ? 'inline' : 'none';
+  badge.textContent = d.pendingRequests;
+
+  $('ovSessionList').innerHTML = d.activeSessions.length === 0 ? '<span class="muted">无人使用</span>' :
+    '<table><tr><th>人员</th><th>机器</th><th>开始</th><th>已用</th></tr>' +
+    d.activeSessions.map(s => `<tr><td>${esc(s.person)}</td><td>${esc(s.machine)}</td><td>${fmtTime(s.startedAt)}</td><td>${fmtSec(s.chargedSeconds)}</td></tr>`).join('') + '</table>';
+
+  $('ovMachines').innerHTML = d.machines.map(m =>
+    `<div style="padding:6px 0"><span class="dot ${m.online ? 'on' : 'off'}"></span>${esc(m.name)} <span class="muted">· 最后心跳 ${fmtTime(m.lastSeenAt)}</span></div>`).join('') || '<span class="muted">无</span>';
+}
+
+// ---------- 账户 ----------
+async function loadPersons() {
+  const [ps, pols] = await Promise.all([api('GET', 'persons'), loadPolicyOptions()]);
+  const polMap = {}; policies.forEach(p => polMap[p.id] = p.name);
+  $('personsTable').innerHTML = '<tr><th>卡号</th><th>姓名</th><th>余额</th><th>策略</th><th>状态</th><th>操作</th></tr>' +
+    ps.map(p => `<tr>
+      <td>${esc(p.cardNo)}</td><td>${esc(p.displayName)}</td>
+      <td class="balance">${fmtSec(p.balanceSeconds)}</td>
+      <td class="muted">${esc(polMap[p.policyId] || p.policyId)}</td>
+      <td>${p.enabled ? '<span class="green">启用</span>' : '<span class="red">停用</span>'}</td>
+      <td><div class="row-actions">
+        <button class="btn sm green" onclick="grant(${p.id},900)">+15m</button>
+        <button class="btn sm green" onclick="grant(${p.id},1800)">+30m</button>
+        <button class="btn sm green" onclick="grant(${p.id},3600)">+1h</button>
+        <button class="btn sm red" onclick="grant(${p.id},-900)">-15m</button>
+        <button class="btn sm" onclick="editPerson(${p.id})">编辑</button>
+      </div></td></tr>`).join('');
+}
+
+async function grant(id, deltaSeconds) {
+  const r = await api('POST', `persons/${id}/balance`, { deltaSeconds, note: 'console' });
+  toast(r.ok ? '已调整' + (r.balanceSeconds != null ? `，余额 ${fmtSec(r.balanceSeconds)}` : '') : (r.reason || '失败'));
+  loadPersons();
+}
+
+function editPerson(id) {
+  api('GET', 'persons').then(ps => {
+    const p = ps.find(x => x.id === id); if (!p) return;
+    editingPersonId = id;
+    $('epTitle').textContent = `（${p.cardNo}）`;
+    $('epName').value = p.displayName; $('epPin').value = '';
+    $('epEnabled').value = String(p.enabled); $('epDelta').value = '';
+    loadPolicyOptions().then(() => { $('epPolicy').value = p.policyId; });
+    show('editPersonPanel');
+  });
+}
+
+async function savePerson() {
+  const body = { displayName: $('epName').value, enabled: $('epEnabled').value === 'true', policyId: +$('epPolicy').value };
+  if ($('epPin').value) body.pin = $('epPin').value;
+  const r = await api('PUT', `persons/${editingPersonId}`, body);
+  const delta = parseInt($('epDelta').value || '0') * 60;
+  if (delta !== 0) await api('POST', `persons/${editingPersonId}/balance`, { deltaSeconds: delta, note: 'console' });
+  toast(r.ok ? '已保存' : (r.reason || '失败'));
+  hide('editPersonPanel'); loadPersons();
+}
+
+async function createPerson() {
+  const body = { cardNo: $('npCard').value.trim(), displayName: $('npName').value.trim(), pin: $('npPin').value,
+    initialSeconds: (parseInt($('npInit').value || '0')) * 60, policyId: +$('npPolicy').value };
+  const r = await api('POST', 'persons', body);
+  toast(r.ok ? '已创建' : (r.reason || '失败'));
+  if (r.ok) { hide('newPersonPanel'); $('npCard').value = $('npName').value = $('npPin').value = ''; }
+  loadPersons();
+}
+
+// ---------- 审批 ----------
+async function loadRequests() {
+  const rs = await api('GET', 'requests?status=pending&limit=50');
+  $('reqTable').innerHTML = rs.length === 0 ? '<tr><td class="muted">暂无待审批申请</td></tr>' :
+    '<tr><th>人员</th><th>申请</th><th>时间</th><th>操作</th></tr>' +
+    rs.map(r => `<tr><td>${esc(r.person)}</td><td class="amber">+${r.minutes} 分钟</td><td>${fmtTime(r.createdAt)}</td>
+      <td><div class="row-actions">
+        <button class="btn sm green" onclick="decide(${r.id},true)">批准</button>
+        <button class="btn sm red" onclick="decide(${r.id},false)">拒绝</button>
+      </div></td></tr>`).join('');
+}
+
+async function decide(id, approve) {
+  const r = await api('POST', `requests/${id}/decide`, { approve });
+  toast(r.ok ? (approve ? '已批准' : '已拒绝') : (r.reason || '操作失败'));
+  loadRequests(); loadOverview();
+}
+
+// ---------- 策略 ----------
+async function loadPolicyOptions() {
+  policies = await api('GET', 'policies');
+  const opts = policies.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $('npPolicy').innerHTML = opts; $('epPolicy').innerHTML = opts;
+  $('polSelect').innerHTML = policies.map(p => `<option value="${p.id}">#${p.id} ${esc(p.name)}</option>`).join('');
+  renderPolTable();
+  return policies;
+}
+
+function renderPolTable() {
+  $('polTable').innerHTML = '<tr><th>#</th><th>名称</th><th>工作日</th><th>周末</th><th>单次上限</th><th>滑动限额</th><th>时段</th><th>状态</th></tr>' +
+    policies.map(p => {
+      let wins = '-';
+      try { const w = JSON.parse(p.allowedWindowsJson); if (w.length) wins = w.map(x => `${x.start}-${x.end}`).join(' / '); } catch {}
+      const sliding = p.slidingWindowSeconds ? `${fmtSec(p.slidingQuotaSeconds)} / ${fmtSec(p.slidingWindowSeconds)}` : '不限';
+      const off = p.offlineQuotaSeconds === null || p.offlineQuotaSeconds === undefined ? '默认'
+                : p.offlineQuotaSeconds === 0 ? '禁止' : fmtSec(p.offlineQuotaSeconds);
+      return `<tr class="${editingPolicyId === p.id ? 'amber' : ''}" style="cursor:pointer" onclick="selectPolicy(${p.id})">
+        <td>${p.id}</td><td>${esc(p.name)}</td>
+        <td>${p.weekdayQuotaSeconds ? fmtSec(p.weekdayQuotaSeconds) : '不限'}</td>
+        <td>${p.weekendQuotaSeconds ? fmtSec(p.weekendQuotaSeconds) : '不限'}</td>
+        <td>${p.maxSessionSeconds ? fmtSec(p.maxSessionSeconds) : '不限'}</td>
+        <td>${esc(sliding)}</td>
+        <td>${esc(off)}</td>
+        <td class="muted">${esc(wins)}</td>
+        <td>${p.enabled ? '<span class="green">启用</span>' : '<span class="red">停用</span>'}</td></tr>`;
+    }).join('');
+}
+
+async function loadPolicies() { await loadPolicyOptions(); if (editingPolicyId) selectPolicy(editingPolicyId); }
+
+function selectPolicy(id) {
+  const p = policies.find(x => x.id === id); if (!p) return;
+  editingPolicyId = id; $('polSelect').value = id;
+  $('polName').value = p.name;
+  $('polWd').value = p.weekdayQuotaSeconds / 60;
+  $('polWe').value = p.weekendQuotaSeconds / 60;
+  $('polMax').value = p.maxSessionSeconds / 60;
+  $('polSw').value = p.slidingWindowSeconds / 60;
+  $('polSq').value = p.slidingQuotaSeconds / 60;
+  $('polOff').value = p.offlineQuotaSeconds === null || p.offlineQuotaSeconds === undefined ? '' : p.offlineQuotaSeconds / 60;
+  $('polEnabled').value = String(p.enabled);
+  let wins = []; try { wins = JSON.parse(p.allowedWindowsJson); } catch {}
+  $('winRows').innerHTML = '';
+  wins.forEach(w => addWinRow(w.start, w.end));
+  renderPolTable();
+}
+
+function loadPolicyForm() { selectPolicy(+$('polSelect').value); }
+
+function newPolicy() {
+  editingPolicyId = null;
+  $('polName').value = '新策略'; $('polWd').value = 60; $('polWe').value = 120; $('polMax').value = 0;
+  $('polSw').value = 0; $('polSq').value = 0;
+  $('polEnabled').value = 'true'; $('winRows').innerHTML = ''; addWinRow('08:00', '21:30');
+  renderPolTable();
+}
+
+function addWinRow(start, end) {
+  const div = document.createElement('div');
+  div.className = 'winrow';
+  div.innerHTML = `<input type="time" value="${start}"> <span class="muted">至</span> <input type="time" value="${end === '24:00' ? '23:59' : end}"> <button class="btn sm red" onclick="this.parentNode.remove()">×</button>`;
+  $('winRows').appendChild(div);
+}
+
+async function savePolicy() {
+  const windows = [...document.querySelectorAll('.winrow')].map(r => {
+    const [s, e] = r.querySelectorAll('input');
+    return { start: s.value || '00:00', end: e.value || '24:00' };
+  });
+  const offRaw = $('polOff').value.trim();
+  const body = { name: $('polName').value, weekdayQuotaMinutes: +$('polWd').value || 0,
+    weekendQuotaMinutes: +$('polWe').value || 0, maxSessionMinutes: +$('polMax').value || 0,
+    slidingWindowMinutes: +$('polSw').value || 0, slidingQuotaMinutes: +$('polSq').value || 0,
+    offlineQuotaMinutes: offRaw === '' ? null : (+offRaw || 0),
+    enabled: $('polEnabled').value === 'true', windows };
+  const r = editingPolicyId
+    ? await api('PUT', `policies/${editingPolicyId}`, body)
+    : await api('POST', 'policies', body);
+  toast(r.ok ? '已保存' : (r.reason || '失败'));
+  if (r.ok && !editingPolicyId) editingPolicyId = r.id;
+  await loadPolicyOptions();
+  if (editingPolicyId) selectPolicy(editingPolicyId);
+}
+
+// ---------- 机器 ----------
+async function loadMachines() {
+  const ms = await api('GET', 'machines');
+  $('machTable').innerHTML = '<tr><th>ID</th><th>名称</th><th>在线</th><th>最后心跳</th><th>操作</th></tr>' +
+    ms.map(m => `<tr><td>${m.id}</td><td>${esc(m.name)}</td>
+      <td>${m.online ? '<span class="green">在线</span>' : '<span class="muted">离线</span>'}</td>
+      <td class="muted">${fmtTime(m.lastSeenAt)}</td>
+      <td><div class="row-actions">
+        <button class="btn sm amber" onclick="cmd(${m.id},'lock')">锁定</button>
+        <button class="btn sm green" onclick="cmd(${m.id},'unlock')">解锁</button>
+        <button class="btn sm" onclick="cmd(${m.id},'logoff')">下机</button>
+        <button class="btn sm" onclick="cmd(${m.id},'message')">消息</button>
+        <button class="btn sm red" onclick="cmd(${m.id},'shutdown')">关机</button>
+        <button class="btn sm red" onclick="cmd(${m.id},'reboot')">重启</button>
+        <button class="btn sm" onclick="delMachine(${m.id},'${esc(m.name)}')">删除</button>
+      </div></td></tr>`).join('');
+}
+
+async function delMachine(id, name) {
+  if (!confirm(`确定删除机器【${name}】？\n其历史会话与指令将一并清除（不可恢复）。`)) return;
+  const r = await api('DELETE', `machines/${id}`);
+  toast(r.ok ? '已删除' : (r.reason || '删除失败'));
+  loadMachines();
+}
+
+async function cmd(id, action) {
+  let text;
+  if (action === 'message') { text = prompt('消息内容：'); if (!text) return; }
+  if (action === 'shutdown' || action === 'reboot') { if (!confirm(`确定对机器执行【${action === 'shutdown' ? '关机' : '重启'}】？`)) return; }
+  const r = await api('POST', `machines/${id}/command`, { action, text });
+  toast(r.ok ? '指令已下发（机器下次心跳生效）' : (r.reason || '失败'));
+}
+
+async function addMachine() {
+  const name = prompt('机器名称（如 PC-1）：'); if (!name) return;
+  const r = await api('POST', 'machines', { name });
+  if (r.ok) alert(`机器已创建 id=${r.id}\n密钥：${r.secret}\n\n请用于 install-client.ps1 的 -MachineId/-Secret 参数`);
+  loadMachines();
+}
+
+// ---------- 记录 ----------
+async function loadRecords() {
+  const ss = await api('GET', 'sessions?limit=50');
+  $('sessTable').innerHTML = '<tr><th>人员</th><th>机器</th><th>开始</th><th>结束</th><th>计费</th><th>原因</th></tr>' +
+    ss.map(s => `<tr><td>${esc(s.person)}</td><td>${esc(s.machine)}</td><td>${fmtTime(s.startedAt)}</td>
+      <td>${s.status === 'active' ? '<span class="green">进行中</span>' : fmtTime(s.endedAt)}</td>
+      <td>${fmtSec(s.chargedSeconds)}</td><td class="muted">${esc(s.endReason || '-')}</td></tr>`).join('');
+}
+
+// ---------- 启动 ----------
+$('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+if (token) { refreshAll(); } else { showLogin(); }
+pollTimer = setInterval(() => {
+  if (token && document.querySelector('#tab-overview.active')) loadOverview();
+}, 5000);
+</script>
+</body>
+</html>

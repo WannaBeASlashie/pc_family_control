@@ -1,4 +1,4 @@
-# HomeCtrl smoke test: full server business flow
+# TimeBank smoke test: full server business flow
 #   admin login -> register machine -> create person (5s balance) -> login
 #   -> heartbeat billing -> exhausted lock -> recharge unlock -> logout settle
 # Usage: powershell -File scripts\smoke-test.ps1 [-Server http://localhost:8080]

@@ -133,7 +133,7 @@ Online ──心跳连续失败≥2──▶ Offline
 
 | 项 | 方案 |
 |---|---|
-| 位置 | `C:\ProgramData\HomeCtrl\offline\`（kit.json + ledger.jsonl） |
+| 位置 | `C:\ProgramData\TimeBank\offline\`（kit.json + ledger.jsonl） |
 | ACL | 安装脚本设置：仅 SYSTEM 与 Administrators 完全控制，Users 无权限（`icacls /inheritance:r`） |
 | 完整性 | 台账追加式 + 记录 GUID；不做签名（威胁模型内篡改需要管理员权限，越界） |
 | PIN 哈希 | 与服务器同格式（PBKDF2-SHA256 100k），泄露面等价于局域网明文登录包 |

@@ -1,4 +1,4 @@
-# HomeCtrl 家庭电脑管控系统 — 完整文档
+# willBeyond TimeBank（时光银行）— 完整文档
 
 > 版本：v1.2（P1 完成 + 滑动窗口限额）｜ 更新：2026-10-20
 > 本文档是项目的唯一权威参考，整合需求、设计、实现与部署。历史演进细节见 `requirements.md` / `design.md`。
@@ -117,21 +117,21 @@
 
 ```
 ┌─────────────────────────── 家庭服务器（Docker, 固定 IP）───────────────────────┐
-│  HomeCtrl.Server (ASP.NET Core 8)                                             │
+│  TimeBank.Server (ASP.NET Core 8)                                             │
 │   ├─ Web 控制台（wwwroot/index.html，手机浏览器）                              │
 │   ├─ API：客户端接口(HMAC) + 管理接口(Bearer)                                  │
 │   ├─ 计费/策略引擎（PolicyEngine）+ 指令队列 + 审批                             │
 │   ├─ SessionReaper（僵尸会话回收 + 数据保留清理，60s 周期）                     │
-│   └─ EF Core + SQLite（/data/homectrl.db，Migrations）                        │
+│   └─ EF Core + SQLite（/data/timebank.db，Migrations）                        │
 └────────────────────────────────▲──────────────────────────────────────────────┘
                                  │ HTTP + HMAC（心跳 10s）
 ┌────────────────────────────────┴───────────────┐
 │ 受控机 ×3（Win10 Pro）                          │
-│  HomeCtrl.Agent（Windows 服务, SYSTEM）          │
+│  TimeBank.Agent（Windows 服务, SYSTEM）          │
 │   ├─ 心跳：上报状态，取会话/有效余额/指令并执行    │
-│   ├─ 命名管道 IPC（homectrl.agent）              │
+│   ├─ 命名管道 IPC（timebank.agent）              │
 │   └─ UI 看门狗（断开 60s → 自动结束会话停表）     │
-│  HomeCtrl.LockScreen（WPF，共享账户自启）         │
+│  TimeBank.LockScreen（WPF，共享账户自启）         │
 │   ├─ 锁屏：登录面板 / 余额耗尽面板（申请加时）     │
 │   └─ 小组件：剩余时间走秒 + 下机 + 到点 Toast     │
 └─────────────────────────────────────────────────┘
@@ -207,7 +207,7 @@ audit_log(id, ts, actor, action, detail)
 
 persons（增删改查 + `{id}/balance` 调整）、policies（增改查，分钟单位）、machines（增删查 + `{id}/command` 指令）、requests（列表 + `{id}/decide` 审批）、overview、sessions、audit、`ledger/{personId}`。
 
-### 3.5 IPC 协议（命名管道 `homectrl.agent`，UTF-8 JSON 行）
+### 3.5 IPC 协议（命名管道 `timebank.agent`，UTF-8 JSON 行）
 
 请求：`{"id":1,"cmd":"getState|login|logout|requestTime"}`；
 响应：`{"id":1,"ok":true,"data":{...}}`；
@@ -239,7 +239,7 @@ persons（增删改查 + `{id}/balance` 调整）、policies（增改查，分�
 ### 4.1 代码结构
 
 ```
-src/server/HomeCtrl.Server          服务端（ASP.NET Core Minimal API）
+src/server/TimeBank.Server          服务端（ASP.NET Core Minimal API）
   Program.cs                        全部端点 + HMAC/PIN/指令辅助
   Services/PolicyEngine.cs          策略引擎（有效余额计算）
   Services/Billing.cs               结算（幂等增量扣费）+ 会话结束流水
@@ -247,14 +247,14 @@ src/server/HomeCtrl.Server          服务端（ASP.NET Core Minimal API）
   Services/AdminAuth.cs             家长令牌
   Migrations/                       EF Core 迁移
   wwwroot/index.html                Web 控制台（单文件 SPA，原生 JS）
-src/client/HomeCtrl.Agent           客户端服务（Worker Service）
+src/client/TimeBank.Agent           客户端服务（Worker Service）
   HeartbeatWorker.cs                心跳循环 + 指令执行
   PipeServerService.cs              管道 IPC（接受循环 + 看门狗）
   AgentGate.cs                      信号量：串行化服务端交互
   AgentState.cs                     状态机 locked=无会话|超限|家长锁定
   ServerApiClient.cs                HMAC 签名 HTTP 客户端
   Win32.cs                          WTSGetActiveConsoleSessionId/Logoff
-src/client/HomeCtrl.LockScreen      锁屏 UI（WPF）
+src/client/TimeBank.LockScreen      锁屏 UI（WPF）
   MainWindow                        登录面板 / 耗尽面板（申请加时）
   WidgetWindow                      右上角剩余时间小组件
   ToastWindow                       10/5/1 分钟提醒
@@ -375,14 +375,14 @@ git pull && docker compose up -d --build   # 迁移自动应用
 
 ### 5.7 备份与恢复
 
-数据库是单文件：`data/homectrl.db`（建议连 `-wal`/`-shm` 一起在停机或低频时拷贝）。恢复 = 停容器 → 覆盖文件 → 起容器。
+数据库是单文件：`data/timebank.db`（建议连 `-wal`/`-shm` 一起在停机或低频时拷贝）。恢复 = 停容器 → 覆盖文件 → 起容器。
 
 ### 5.8 故障排查
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | 锁屏显示"无法连接服务器" | 服务端/网络问题 | 检查 `docker ps`、ping 服务器；看容器日志 |
-| 锁屏显示"本机管控服务未运行" | Agent 服务没起来 | `sc query <服务名>`；Windows 事件日志看 HomeCtrl.Agent 来源 |
+| 锁屏显示"本机管控服务未运行" | Agent 服务没起来 | `sc query <服务名>`；Windows 事件日志看 TimeBank.Agent 来源 |
 | 机器一直离线 | Agent 心跳失败 | 同上；确认 appsettings 的 Server 配置 |
 | "在线 0/N 但上机 1"（持续） | 僵尸会话 | v1.2 已修复自动回收；仍异常看容器日志 reaper 报错 |
 | 充值了没解锁 | unlock 指令未达 | 机器在线则等 10s；离线则指令过期，孩子重登即可 |
@@ -393,9 +393,9 @@ git pull && docker compose up -d --build   # 迁移自动应用
 
 ```bash
 # 构建 & 全量测试
-& "C:\Program Files\dotnet\dotnet.exe" build HomeCtrl.sln
+& "C:\Program Files\dotnet\dotnet.exe" build TimeBank.sln
 # 起 dev 服务端（自动迁移）
-& "C:\Program Files\dotnet\dotnet.exe" run --project src/server/HomeCtrl.Server
+& "C:\Program Files\dotnet\dotnet.exe" run --project src/server/TimeBank.Server
 powershell -File scripts/smoke-test.ps1          # 32 项
 powershell -File scripts/e2e-agent-test.ps1      # 13 项（真实 Agent）
 powershell -File scripts/e2e-agent-commands-test.ps1   # 9 项
@@ -403,7 +403,7 @@ powershell -File scripts/demo-ui.ps1             # 可视化调试（ESC 退出�
 
 # 改表结构
 $env:Path = "C:\Program Files\dotnet;$env:Path"
-dotnet ef migrations add <名称> --project src/server/HomeCtrl.Server
+dotnet ef migrations add <名称> --project src/server/TimeBank.Server
 ```
 
 提交规范：每个功能/修复一个 commit，说明"做了什么+为什么"；破坏性决策记录进 design.md 决策表。

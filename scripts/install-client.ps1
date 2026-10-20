@@ -1,4 +1,4 @@
-# HomeCtrl 客户端安装脚本（需在【管理员】PowerShell 中运行）
+# TimeBank 客户端安装脚本（需在【管理员】PowerShell 中运行）
 #
 # 用法示例（服务名可自定义以伪装成系统服务）：
 #   .\install-client.ps1 -ServiceName WksHealthSvc `
@@ -8,13 +8,13 @@
 #
 # 步骤：发布 Agent/UI → 写配置 → 注册服务（含崩溃自动重启）→ UI 加入开机自启
 param(
-    [string]$ServiceName = "HomeCtrlAgent",
-    [string]$DisplayName = "HomeCtrl Agent",
-    [string]$Description = "HomeCtrl Agent",
+    [string]$ServiceName = "TimeBankAgent",
+    [string]$DisplayName = "TimeBank Agent",
+    [string]$Description = "TimeBank Agent",
     [string]$BaseUrl = "http://192.168.1.10:8080",
     [string]$MachineId = "1",
     [string]$Secret = "",
-    [string]$InstallDir = "C:\ProgramData\HomeCtrl"
+    [string]$InstallDir = "C:\ProgramData\TimeBank"
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,7 +31,7 @@ $repo = Split-Path -Parent $PSScriptRoot
 
 # 1) 停止旧版本（服务/UI 运行时文件被占用，必须先停再发布，否则重装失败）
 Write-Host ">> 停止旧版本 ..."
-Get-Process HomeCtrl.LockScreen -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process TimeBank.LockScreen -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
     sc.exe stop $ServiceName | Out-Null
     sc.exe delete $ServiceName | Out-Null
@@ -40,11 +40,11 @@ if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
 
 # 2) 发布
 Write-Host ">> 发布 Agent ..."
-dotnet publish (Join-Path $repo "src\client\HomeCtrl.Agent") -c Release -o "$InstallDir\agent"
+dotnet publish (Join-Path $repo "src\client\TimeBank.Agent") -c Release -o "$InstallDir\agent"
 if ($LASTEXITCODE -ne 0) { throw "Agent 发布失败（需已安装 .NET 8 SDK）" }
 
 Write-Host ">> 发布 LockScreen UI ..."
-dotnet publish (Join-Path $repo "src\client\HomeCtrl.LockScreen") -c Release -o "$InstallDir\ui"
+dotnet publish (Join-Path $repo "src\client\TimeBank.LockScreen") -c Release -o "$InstallDir\ui"
 if ($LASTEXITCODE -ne 0) { throw "LockScreen 发布失败" }
 
 # 3) 写配置
@@ -55,7 +55,7 @@ if ($LASTEXITCODE -ne 0) { throw "LockScreen 发布失败" }
 } | ConvertTo-Json -Depth 5 | Set-Content "$InstallDir\agent\appsettings.json" -Encoding UTF8
 
 # 4) 注册 Windows 服务（名称即在此伪装）+ 崩溃自动重启
-sc.exe create $ServiceName binPath= "$InstallDir\agent\HomeCtrl.Agent.exe" start= auto DisplayName= $DisplayName
+sc.exe create $ServiceName binPath= "$InstallDir\agent\TimeBank.Agent.exe" start= auto DisplayName= $DisplayName
 sc.exe description $ServiceName $Description
 sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/10000/restart/60000
 sc.exe start $ServiceName
@@ -67,8 +67,8 @@ icacls "$InstallDir\offline" /inheritance:r /grant "SYSTEM:(OI)(CI)F" /grant "Ad
 # 6) 锁屏 UI 加入当前用户开机自启（共享 Windows 账户需先配置自动登录）
 $startup = [Environment]::GetFolderPath("Startup")
 $shell = New-Object -ComObject WScript.Shell
-$lnk = $shell.CreateShortcut((Join-Path $startup "HomeCtrlUI.lnk"))
-$lnk.TargetPath = "$InstallDir\ui\HomeCtrl.LockScreen.exe"
+$lnk = $shell.CreateShortcut((Join-Path $startup "TimeBankUI.lnk"))
+$lnk.TargetPath = "$InstallDir\ui\TimeBank.LockScreen.exe"
 $lnk.WorkingDirectory = "$InstallDir\ui"
 $lnk.Save()
 

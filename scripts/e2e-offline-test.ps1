@@ -1,4 +1,4 @@
-# HomeCtrl offline-mode e2e test (FR-17):
+# TimeBank offline-mode e2e test (FR-17):
 #   start server+agent -> kit synced -> kill server -> offline mode ->
 #   offline login (wrong/right PIN) -> local countdown -> request rejected ->
 #   offline logout -> restart server -> reconnect -> reconcile (session row,
@@ -15,8 +15,8 @@ $script:pass = 0; $script:fail = 0
 [System.Net.WebRequest]::DefaultWebProxy = $null
 
 $repo = Split-Path -Parent $PSScriptRoot
-$serverDll = "$repo\src\server\HomeCtrl.Server\bin\Debug\net8.0\HomeCtrl.Server.dll"
-$serverDir = "$repo\src\server\HomeCtrl.Server"
+$serverDll = "$repo\src\server\TimeBank.Server\bin\Debug\net8.0\TimeBank.Server.dll"
+$serverDir = "$repo\src\server\TimeBank.Server"
 
 function Check([string]$name, [bool]$cond) {
     if ($cond) { $script:pass++; Write-Host "  [PASS] $name" -ForegroundColor Green }
@@ -24,16 +24,16 @@ function Check([string]$name, [bool]$cond) {
 }
 
 function Stop-TestServers {
-    # NOTE: server launched as "dotnet <dll>" has process name "dotnet", not HomeCtrl.Server!
+    # NOTE: server launched as "dotnet <dll>" has process name "dotnet", not TimeBank.Server!
     Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
-        Where-Object { $_.CommandLine -match "HomeCtrl\.Server" } |
+        Where-Object { $_.CommandLine -match "TimeBank\.Server" } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
 function Pipe-Call([string]$cmd, [hashtable]$extra = $null) {
     $pipe = $null
     try {
-        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", "homectrl.agent", [System.IO.Pipes.PipeDirection]::InOut)
+        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", "timebank.agent", [System.IO.Pipes.PipeDirection]::InOut)
         $pipe.Connect(5000)
         $writer = [System.IO.StreamWriter]::new($pipe, [System.Text.Encoding]::UTF8)
         $writer.AutoFlush = $true
@@ -69,11 +69,11 @@ function Start-TestServer {
 
 # ---------- clean slate ----------
 Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
-    Where-Object { $_.CommandLine -match "HomeCtrl\.Agent" } |
+    Where-Object { $_.CommandLine -match "TimeBank\.Agent" } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Stop-TestServers
 Start-Sleep 1
-Remove-Item "C:\ProgramData\HomeCtrl\offline\ledger.json" -ErrorAction SilentlyContinue
+Remove-Item "C:\ProgramData\TimeBank\offline\ledger.json" -ErrorAction SilentlyContinue
 Write-Host "== start server =="
 Start-TestServer
 
@@ -91,13 +91,13 @@ $env:Server__BaseUrl = $Server
 $env:Server__MachineId = "$($mach.id)"
 $env:Server__Secret = $mach.secret
 $env:HeartbeatSeconds = "3"
-$agent = Start-Process -FilePath $Dotnet -ArgumentList @("$repo\src\client\HomeCtrl.Agent\bin\Debug\net8.0\HomeCtrl.Agent.dll") -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\hc-off-agent-out.log" -RedirectStandardError "$env:TEMP\hc-off-agent-err.log"
+$agent = Start-Process -FilePath $Dotnet -ArgumentList @("$repo\src\client\TimeBank.Agent\bin\Debug\net8.0\TimeBank.Agent.dll") -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\hc-off-agent-out.log" -RedirectStandardError "$env:TEMP\hc-off-agent-err.log"
 
 try {
     $state = $null
     for ($i = 0; $i -lt 20; $i++) { Start-Sleep -Milliseconds 500; try { $state = Pipe-Call "getState"; break } catch {} }
     Check "agent up, online, not offline" ($state.data.serverOnline -eq $true -and $state.data.offline -eq $false)
-    $kitPath = "C:\ProgramData\HomeCtrl\offline\kit.json"
+    $kitPath = "C:\ProgramData\TimeBank\offline\kit.json"
     $kitOk = $false
     for ($i = 0; $i -lt 10; $i++) {
         if (Test-Path $kitPath) { $kitOk = $true; break }
@@ -169,7 +169,7 @@ try {
 } finally {
     Stop-Process -Id $agent.Id -Force -ErrorAction SilentlyContinue
     Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
-        Where-Object { $_.CommandLine -match "HomeCtrl\.Agent" } |
+        Where-Object { $_.CommandLine -match "TimeBank\.Agent" } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     $env:Server__BaseUrl = $null; $env:Server__MachineId = $null; $env:Server__Secret = $null; $env:HeartbeatSeconds = $null
 }
