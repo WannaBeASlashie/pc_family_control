@@ -23,6 +23,8 @@ public class Policy
     public long WeekendQuotaSeconds { get; set; }   // 0 = 不限
     public string AllowedWindowsJson { get; set; } = "[{\"start\":\"00:00\",\"end\":\"24:00\"}]";
     public long MaxSessionSeconds { get; set; }     // 0 = 不限
+    public long SlidingWindowSeconds { get; set; }  // 滑动窗口长度（0=不启用，需与限额同时>0）
+    public long SlidingQuotaSeconds { get; set; }   // 窗口内最大累计用时（0=不启用）
     public bool Enabled { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

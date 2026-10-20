@@ -28,26 +28,50 @@ public static class PolicyEngine
         var outside = !InWindow(policy.AllowedWindowsJson, localNow);
         if (outside) reason = "curfew";
 
-        // 2) 每日额度：当日（本地日期）所有会话的已计费总和
+        // 2) 每日额度 + 3) 滑动窗口：都需要拉取最近会话
         var quota = localNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday
             ? policy.WeekendQuotaSeconds
             : policy.WeekdayQuotaSeconds;
-        if (quota > 0)
+        var slidingOn = policy.SlidingWindowSeconds > 0 && policy.SlidingQuotaSeconds > 0;
+        List<Session>? recent = null;
+        if (quota > 0 || slidingOn)
         {
-            var localMidnightUtc = localNow.Date.AddHours(-tzOffsetHours);
-            // 取最近 200 条会话在内存中按本地日期过滤：规避 SQLite DateTime SQL 比较的
+            // 取最近 200 条会话在内存中计算：规避 SQLite DateTime SQL 比较的
             // provider 差异，同时 EF 的 identity resolution 会带回 ChangeTracker 里
             // 刚 Settle 但尚未保存的当前会话计费。
             // 200 条足以覆盖任何正常的一天（防"刷短会话挤掉消费记录"绕过每日额度）。
-            var recent = db.Sessions
+            recent = db.Sessions
                 .Where(s => s.PersonId == person.Id)
                 .OrderByDescending(s => s.StartedAt)
                 .Take(200)
                 .ToList();
+        }
+
+        if (quota > 0 && recent is not null)
+        {
+            // 每日额度：当日（本地日期）所有会话的已计费总和
+            var localMidnightUtc = localNow.Date.AddHours(-tzOffsetHours);
             var consumed = recent.Where(s => s.StartedAt >= localMidnightUtc).Sum(s => s.ChargedSeconds);
             var dailyRemaining = quota - consumed;
             if (dailyRemaining <= 0 && reason is null) reason = "daily_quota";
             effective = Math.Min(effective, dailyRemaining);
+        }
+
+        if (slidingOn && recent is not null)
+        {
+            // 滑动窗口：最近 WindowSeconds 墙钟内，所有会话（含当前）与窗口的
+            // 重叠时长之和不得超过 QuotaSeconds。窗口滑动后旧用量自动"老化"释放。
+            var windowStart = utcNow.AddSeconds(-policy.SlidingWindowSeconds);
+            var usageInWindow = recent.Sum(s =>
+            {
+                var end = s.EndedAt ?? utcNow;          // 进行中的会话计到当前时刻
+                if (end > utcNow) end = utcNow;
+                var start = s.StartedAt > windowStart ? s.StartedAt : windowStart;
+                return end > start ? (long)(end - start).TotalSeconds : 0L;
+            });
+            var slidingRemaining = policy.SlidingQuotaSeconds - usageInWindow;
+            if (slidingRemaining <= 0 && reason is null) reason = "sliding_quota";
+            effective = Math.Min(effective, slidingRemaining);
         }
 
         // 3) 单次连续上限（仅对进行中的会话）

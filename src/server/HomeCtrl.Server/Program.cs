@@ -532,6 +532,8 @@ app.MapGet("/api/admin/policies", (HttpContext ctx, AppDbContext db, AdminAuth a
             weekdayQuotaSeconds = p.WeekdayQuotaSeconds,
             weekendQuotaSeconds = p.WeekendQuotaSeconds,
             maxSessionSeconds = p.MaxSessionSeconds,
+            slidingWindowSeconds = p.SlidingWindowSeconds,
+            slidingQuotaSeconds = p.SlidingQuotaSeconds,
             p.AllowedWindowsJson, p.Enabled
         })
         .ToList();
@@ -550,6 +552,8 @@ app.MapPost("/api/admin/policies", (PolicyReq req, HttpContext ctx, AppDbContext
         WeekdayQuotaSeconds = Math.Max(req.WeekdayQuotaMinutes, 0) * 60,
         WeekendQuotaSeconds = Math.Max(req.WeekendQuotaMinutes, 0) * 60,
         MaxSessionSeconds = Math.Max(req.MaxSessionMinutes, 0) * 60,
+        SlidingWindowSeconds = Math.Max(req.SlidingWindowMinutes, 0) * 60,
+        SlidingQuotaSeconds = Math.Max(req.SlidingQuotaMinutes, 0) * 60,
         AllowedWindowsJson = WindowsJson(req.Windows),
         Enabled = req.Enabled,
         CreatedAt = DateTime.UtcNow,
@@ -572,6 +576,8 @@ app.MapPut("/api/admin/policies/{id}", (int id, PolicyReq req, HttpContext ctx, 
     p.WeekdayQuotaSeconds = Math.Max(req.WeekdayQuotaMinutes, 0) * 60;
     p.WeekendQuotaSeconds = Math.Max(req.WeekendQuotaMinutes, 0) * 60;
     p.MaxSessionSeconds = Math.Max(req.MaxSessionMinutes, 0) * 60;
+    p.SlidingWindowSeconds = Math.Max(req.SlidingWindowMinutes, 0) * 60;
+    p.SlidingQuotaSeconds = Math.Max(req.SlidingQuotaMinutes, 0) * 60;
     p.AllowedWindowsJson = WindowsJson(req.Windows);
     p.Enabled = req.Enabled;
     p.UpdatedAt = DateTime.UtcNow;
@@ -586,6 +592,10 @@ static string? ValidatePolicy(PolicyReq req)
         foreach (var w in req.Windows)
             if (!PolicyEngine.TryParseHm(w.Start, out _) || !PolicyEngine.TryParseHm(w.End, out _))
                 return "时段格式应为 HH:mm";
+    if ((req.SlidingWindowMinutes > 0) != (req.SlidingQuotaMinutes > 0))
+        return "滑动窗口长度与窗口限额需同时设置（同时为 0 表示不启用）";
+    if (req.SlidingWindowMinutes > 0 && req.SlidingQuotaMinutes > req.SlidingWindowMinutes)
+        return "滑动窗口限额不能超过窗口长度";
     return null;
 }
 
@@ -686,6 +696,6 @@ record CreateMachineReq(string Name);
 record CommandReq(string Action, string? Text);
 record RequestTimeReq(int Minutes);
 record DecideReq(bool Approve, string? Note);
-record PolicyReq(string Name, long WeekdayQuotaMinutes, long WeekendQuotaMinutes, List<PolicyWindowReq>? Windows, long MaxSessionMinutes, bool Enabled);
+record PolicyReq(string Name, long WeekdayQuotaMinutes, long WeekendQuotaMinutes, List<PolicyWindowReq>? Windows, long MaxSessionMinutes, bool Enabled, long SlidingWindowMinutes = 0, long SlidingQuotaMinutes = 0);
 record PolicyWindowReq(string Start, string End);
 record FailState(int Count, DateTime LockedUntil, DateTime LastFailAt);

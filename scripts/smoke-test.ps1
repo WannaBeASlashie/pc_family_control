@@ -155,6 +155,25 @@ Invoke-RestMethod -Method Post "$Server/api/admin/persons" -Headers $auth -Conte
 $login3 = Invoke-Client "/api/client/login" $mach.id $mach.secret @{cardNo=$card3; pin="3333"}
 Check "login rejected outside window" (-not $login3.ok)
 
+Write-Host "`n== 13. Policy: sliding window (2h window / 60s quota, needs ~70s) =="
+$polS = Invoke-RestMethod -Method Post "$Server/api/admin/policies" -Headers $auth -ContentType "application/json" -Body (@{name="sliding-test"; weekdayQuotaMinutes=0; weekendQuotaMinutes=0; maxSessionMinutes=0; enabled=$true; windows=@(); slidingWindowMinutes=2; slidingQuotaMinutes=1} | ConvertTo-Json -Compress)
+Check "sliding policy created (id=$($polS.id))" ([bool]$polS.ok)
+$badSliding = Invoke-RestMethod -Method Post "$Server/api/admin/policies" -Headers $auth -ContentType "application/json" -Body (@{name="bad-sliding"; weekdayQuotaMinutes=0; weekendQuotaMinutes=0; maxSessionMinutes=0; enabled=$true; windows=@(); slidingWindowMinutes=0; slidingQuotaMinutes=30} | ConvertTo-Json -Compress)
+Check "half-configured sliding rejected" (-not $badSliding.ok)
+$card4 = "S$(Get-Random)"
+Invoke-RestMethod -Method Post "$Server/api/admin/persons" -Headers $auth -ContentType "application/json" -Body (@{cardNo=$card4; displayName="SlidingTest"; pin="4444"; initialSeconds=3600; policyId=$polS.id} | ConvertTo-Json -Compress) | Out-Null
+$login4 = Invoke-Client "/api/client/login" $mach.id $mach.secret @{cardNo=$card4; pin="4444"}
+Check "login ok, sliding cap applied ($($login4.balanceSeconds)s <= 60s)" ($login4.ok -and $login4.balanceSeconds -gt 0 -and $login4.balanceSeconds -le 60)
+Write-Host "  waiting 70s for sliding quota to exhaust..."
+Start-Sleep 70
+$hb = Invoke-Client "/api/client/heartbeat" $mach.id $mach.secret
+Check "effective balance hits 0 (sliding quota)" ($hb.balanceSeconds -eq 0)
+Check "lock issued with sliding_quota reason" (@($hb.commands | Where-Object { $_.action -eq "lock" -and $_.payload -match "sliding_quota" }).Count -ge 1)
+$hb.commands | ForEach-Object { Invoke-Client "/api/client/command-ack" $mach.id $mach.secret @{commandId=$_.id} | Out-Null }
+Invoke-Client "/api/client/logout" $mach.id $mach.secret | Out-Null
+$re4 = Invoke-Client "/api/client/login" $mach.id $mach.secret @{cardNo=$card4; pin="4444"}
+Check "re-login rejected (usage still inside sliding window)" (-not $re4.ok)
+
 Write-Host "`n================================"
 Write-Host "Result: $pass passed, $fail failed"
 if ($fail -gt 0) { exit 1 }

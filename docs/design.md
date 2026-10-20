@@ -17,6 +17,7 @@
 | D16 | Agent 内以信号量串行化心跳/登录/下机/申请/看门狗的服务端交互，防状态交错覆盖 |
 | D17 | 策略引擎（FR-05）：有效余额 = min(账户余额, 每日剩余额度, 单次剩余)；任一 ≤0 或在时段外（宵禁）→ 锁屏+宽限+下机流程；日期/星期按 `Policy:TzOffsetHours`（默认 +8）本地化计算 |
 | D18 | 数据库改为 EF Core Migrations（`Database.Migrate()` + 启动种子默认策略），后续改表用 `dotnet ef migrations add` |
+| D19 | 滑动窗口限额（FR-05b）：窗口内用量 = 各会话与 [now−N, now] 的墙钟重叠之和（含进行中会话）；到量 → `sliding_quota` 锁定；旧用量随窗口滑出自动释放额度。跨会话累计，刷上下机无法绕过 |
 
 ## 2. 组件模型
 
@@ -152,6 +153,8 @@ CREATE TABLE policies (        -- 策略（FR-05）
   weekend_quota_seconds INTEGER NOT NULL DEFAULT 0,   -- 0=不限
   allowed_windows_json TEXT NOT NULL DEFAULT '[{"start":"00:00","end":"24:00"}]',
   max_session_seconds INTEGER NOT NULL DEFAULT 0,     -- 单次连续上限，0=不限
+  sliding_window_seconds INTEGER NOT NULL DEFAULT 0,  -- 滑动窗口长度，0=不启用（FR-05b）
+  sliding_quota_seconds INTEGER NOT NULL DEFAULT 0,   -- 窗口内最大累计用时，0=不启用
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

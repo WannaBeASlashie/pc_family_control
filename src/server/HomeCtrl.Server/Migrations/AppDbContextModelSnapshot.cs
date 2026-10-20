@@ -202,6 +202,12 @@ namespace HomeCtrl.Server.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("SlidingQuotaSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SlidingWindowSeconds")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 

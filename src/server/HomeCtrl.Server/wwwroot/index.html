@@ -143,8 +143,11 @@
         <div><label>工作日每日额度（分钟，0 不限）</label><input id="polWd" type="number"></div>
         <div><label>周末每日额度（分钟，0 不限）</label><input id="polWe" type="number"></div>
         <div><label>单次连续上限（分钟，0 不限）</label><input id="polMax" type="number"></div>
+        <div><label>滑动窗口长度（分钟，0 不启用）</label><input id="polSw" type="number" placeholder="如 120"></div>
+        <div><label>窗口内最大用时（分钟，0 不启用）</label><input id="polSq" type="number" placeholder="如 45"></div>
         <div><label>启用</label><select id="polEnabled"><option value="true">启用</option><option value="false">停用</option></select></div>
       </div>
+      <p class="muted" style="font-size:13px;margin-top:6px">滑动窗口示例：长度 120、限额 45 = 最近 2 小时内最多累计上机 45 分钟（跨会话累计，到量锁定，窗口滑过旧用量后自动恢复）。</p>
       <label>可用时段（时段外=宵禁，空=全天）</label>
       <div id="winRows"></div>
       <button class="btn sm" onclick="addWinRow('','')">＋ 添加时段</button>
@@ -333,15 +336,17 @@ async function loadPolicyOptions() {
 }
 
 function renderPolTable() {
-  $('polTable').innerHTML = '<tr><th>#</th><th>名称</th><th>工作日</th><th>周末</th><th>单次上限</th><th>时段</th><th>状态</th></tr>' +
+  $('polTable').innerHTML = '<tr><th>#</th><th>名称</th><th>工作日</th><th>周末</th><th>单次上限</th><th>滑动限额</th><th>时段</th><th>状态</th></tr>' +
     policies.map(p => {
       let wins = '-';
       try { const w = JSON.parse(p.allowedWindowsJson); if (w.length) wins = w.map(x => `${x.start}-${x.end}`).join(' / '); } catch {}
+      const sliding = p.slidingWindowSeconds ? `${fmtSec(p.slidingQuotaSeconds)} / ${fmtSec(p.slidingWindowSeconds)}` : '不限';
       return `<tr class="${editingPolicyId === p.id ? 'amber' : ''}" style="cursor:pointer" onclick="selectPolicy(${p.id})">
         <td>${p.id}</td><td>${esc(p.name)}</td>
         <td>${p.weekdayQuotaSeconds ? fmtSec(p.weekdayQuotaSeconds) : '不限'}</td>
         <td>${p.weekendQuotaSeconds ? fmtSec(p.weekendQuotaSeconds) : '不限'}</td>
         <td>${p.maxSessionSeconds ? fmtSec(p.maxSessionSeconds) : '不限'}</td>
+        <td>${esc(sliding)}</td>
         <td class="muted">${esc(wins)}</td>
         <td>${p.enabled ? '<span class="green">启用</span>' : '<span class="red">停用</span>'}</td></tr>`;
     }).join('');
@@ -356,6 +361,8 @@ function selectPolicy(id) {
   $('polWd').value = p.weekdayQuotaSeconds / 60;
   $('polWe').value = p.weekendQuotaSeconds / 60;
   $('polMax').value = p.maxSessionSeconds / 60;
+  $('polSw').value = p.slidingWindowSeconds / 60;
+  $('polSq').value = p.slidingQuotaSeconds / 60;
   $('polEnabled').value = String(p.enabled);
   let wins = []; try { wins = JSON.parse(p.allowedWindowsJson); } catch {}
   $('winRows').innerHTML = '';
@@ -368,6 +375,7 @@ function loadPolicyForm() { selectPolicy(+$('polSelect').value); }
 function newPolicy() {
   editingPolicyId = null;
   $('polName').value = '新策略'; $('polWd').value = 60; $('polWe').value = 120; $('polMax').value = 0;
+  $('polSw').value = 0; $('polSq').value = 0;
   $('polEnabled').value = 'true'; $('winRows').innerHTML = ''; addWinRow('08:00', '21:30');
   renderPolTable();
 }
@@ -386,6 +394,7 @@ async function savePolicy() {
   });
   const body = { name: $('polName').value, weekdayQuotaMinutes: +$('polWd').value || 0,
     weekendQuotaMinutes: +$('polWe').value || 0, maxSessionMinutes: +$('polMax').value || 0,
+    slidingWindowMinutes: +$('polSw').value || 0, slidingQuotaMinutes: +$('polSq').value || 0,
     enabled: $('polEnabled').value === 'true', windows };
   const r = editingPolicyId
     ? await api('PUT', `policies/${editingPolicyId}`, body)
