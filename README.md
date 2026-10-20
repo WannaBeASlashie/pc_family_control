@@ -29,12 +29,15 @@
 ## 目录
 
 ```
-docs/                    需求与设计文档
+docs/                    需求与设计文档 / 完整手册
+web/                     Vue 3 + TypeScript 管理控制台（Vite）
 src/server/TimeBank.Server     服务端（ASP.NET Core 8 + EF Core + SQLite）
 src/client/TimeBank.Agent      客户端服务（Worker Service, SYSTEM）
 src/client/TimeBank.LockScreen 锁屏 UI（WPF）
 scripts/install-client.ps1     客户端一键安装（含服务名伪装）
-docker-compose.yml             服务端部署
+scripts/build-web.ps1          构建控制台并拷入服务端 wwwroot
+scripts/*-test.ps1             自动化测试（72 项）
+docker-compose.yml             服务端部署（web 在镜像内构建）
 ```
 
 ## 快速开始
@@ -45,12 +48,21 @@ docker-compose.yml             服务端部署
 docker compose up -d --build      # 端口 8080，数据在 ./data/timebank.db
 ```
 
-开发模式（本机 .NET 8 SDK）：
+开发模式（本机 .NET 8 SDK，控制台用 Vite 热更新）：
 
 ```bash
+# 终端 1：服务端
 cd src/server/TimeBank.Server
 dotnet run
+
+# 终端 2：控制台（Vite 代理 /api 到 8080）
+cd web
+npm.cmd install
+npm.cmd run dev        # http://localhost:5173
 ```
+
+> Windows PowerShell 下用 `npm.cmd`（`npm.ps1` 会被执行策略拦截）。
+> 生产构建：`powershell -File scripts\build-web.ps1`（输出到服务端 wwwroot）。
 
 ### 2. 初始化数据
 

@@ -1,0 +1,10 @@
+.git
+**/bin
+**/obj
+**/node_modules
+web/dist
+src/server/TimeBank.Server/wwwroot
+data
+*.db
+*.db-shm
+*.db-wal

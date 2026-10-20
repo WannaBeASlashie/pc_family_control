@@ -393,18 +393,32 @@ git pull && docker compose up -d --build   # 迁移自动应用
 
 ```bash
 # 构建 & 全量测试
-& "C:\Program Files\dotnet\dotnet.exe" build TimeBank.sln
+& "C:\Program Files\dotnet\dotnet.exe" build willBeyond-TimeBank.sln
+
+# Web 控制台（Vue 3 + TS + Vite）
+cd web
+npm.cmd run dev          # 热更新开发（代理 /api → 8080）
+npm.cmd run typecheck    # vue-tsc 类型检查
+cd ..
+powershell -File scripts\build-web.ps1   # 生产构建 → 服务端 wwwroot
+
 # 起 dev 服务端（自动迁移）
 & "C:\Program Files\dotnet\dotnet.exe" run --project src/server/TimeBank.Server
-powershell -File scripts/smoke-test.ps1          # 32 项
+powershell -File scripts/smoke-test.ps1          # 35 项
 powershell -File scripts/e2e-agent-test.ps1      # 13 项（真实 Agent）
 powershell -File scripts/e2e-agent-commands-test.ps1   # 9 项
+powershell -File scripts/e2e-offline-test.ps1    # 15 项（离线/补账）
 powershell -File scripts/demo-ui.ps1             # 可视化调试（ESC 退出）
 
 # 改表结构
 $env:Path = "C:\Program Files\dotnet;$env:Path"
 dotnet ef migrations add <名称> --project src/server/TimeBank.Server
 ```
+
+管理控制台（`web/`）：Vue 3 + TypeScript + Vite + vue-router（history 模式，服务端 `MapFallback` 回 index.html）。
+设计 token 见 `web/src/styles/theme.css`，与 willBeyond Everything 共用视觉体系。
+Docker 构建为多阶段（node 构建前端 → dotnet 发布 → 运行时镜像）；本地开发用 Vite 代理避免 CORS。
+Windows PowerShell 下 npm 用 `npm.cmd`（`npm.ps1` 受执行策略限制）。
 
 提交规范：每个功能/修复一个 commit，说明"做了什么+为什么"；破坏性决策记录进 design.md 决策表。
 

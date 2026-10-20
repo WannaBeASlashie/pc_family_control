@@ -1,6 +1,8 @@
 services:
   timebank:
-    build: ./src/server/TimeBank.Server
+    build:
+      context: .
+      dockerfile: src/server/TimeBank.Server/Dockerfile
     container_name: timebank
     restart: unless-stopped
     ports:

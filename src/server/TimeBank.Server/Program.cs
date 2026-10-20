@@ -803,6 +803,16 @@ app.MapGet("/api/admin/audit", (HttpContext ctx, AppDbContext db, AdminAuth auth
     return Results.Json(logs);
 });
 
+// SPA fallback：非 /api 的未匹配路径回 index.html（history 路由刷新不丢）
+app.MapFallback((HttpContext ctx) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/api"))
+        return Results.NotFound();
+    var wwwroot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+    var index = Path.Combine(wwwroot, "index.html");
+    return File.Exists(index) ? Results.File(index, "text/html") : Results.NotFound();
+});
+
 app.Run();
 
 // ---------- 请求模型 ----------

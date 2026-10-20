@@ -8,3 +8,6 @@ data/
 *.db-wal
 .vs/
 .idea/
+web/node_modules/
+web/dist/
+src/server/TimeBank.Server/wwwroot/
