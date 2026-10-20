@@ -7,7 +7,8 @@ public record StateSnapshot(
     string? PersonName,
     long BalanceSeconds,
     bool ServerOnline,
-    string? Message);
+    string? Message,
+    bool Offline);
 
 public record HeartbeatSession(int Id, string Person, DateTime StartedAt);
 
@@ -17,7 +18,12 @@ public record HeartbeatResp(
     DateTime ServerTime,
     HeartbeatSession? Session,
     long BalanceSeconds,
-    List<HeartbeatCommand>? Commands);
+    List<HeartbeatCommand>? Commands,
+    OfflineKit? OfflineKit = null);
+
+// 离线档案（服务端心跳下发，Agent 持久化到 ProgramData\HomeCtrl\offline\kit.json）
+public record OfflineKitPerson(string CardNo, string? DisplayName, string PinHash, long Balance, long Quota);
+public record OfflineKit(DateTime GeneratedAt, int MaxAgeHours, int TzOffsetHours, long MachineDailySeconds, List<OfflineKitPerson>? Persons);
 
 public record LoginResp(bool Ok, string? Reason, int? SessionId, string? Person, long BalanceSeconds);
 

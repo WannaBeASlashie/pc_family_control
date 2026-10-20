@@ -8,6 +8,7 @@ builder.Services.AddWindowsService(o =>
 
 builder.Services.AddSingleton<AgentState>();
 builder.Services.AddSingleton<AgentGate>();
+builder.Services.AddSingleton<OfflineManager>();
 builder.Services.AddSingleton<ServerApiClient>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 builder.Services.AddHostedService<PipeServerService>();

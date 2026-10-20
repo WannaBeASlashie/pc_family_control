@@ -13,7 +13,9 @@ public class AgentState
     public string? PersonName { get; private set; }
     public long BalanceSeconds { get; private set; }
     public bool ServerOnline { get; private set; }
+    public bool Offline { get; private set; }
     public string? Message { get; private set; }
+    public string? CardNo { get; private set; }
     private bool AdminLocked { get; set; }
 
     public event Action? Changed;
@@ -21,13 +23,24 @@ public class AgentState
     public StateSnapshot Snapshot()
     {
         lock (_lock)
-            return new StateSnapshot(Locked, SessionId, PersonName, BalanceSeconds, ServerOnline, Message);
+            return new StateSnapshot(Locked, SessionId, PersonName, BalanceSeconds, ServerOnline, Message, Offline);
     }
 
     public void SetOnline(bool online)
     {
         lock (_lock) ServerOnline = online;
         Changed?.Invoke();
+    }
+
+    public void SetOffline(bool offline)
+    {
+        lock (_lock) Offline = offline;
+        Changed?.Invoke();
+    }
+
+    public void SetCardNo(string? cardNo)
+    {
+        lock (_lock) CardNo = cardNo;
     }
 
     public void SetMessage(string? message)

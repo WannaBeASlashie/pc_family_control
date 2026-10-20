@@ -60,7 +60,11 @@ sc.exe description $ServiceName $Description
 sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/10000/restart/60000
 sc.exe start $ServiceName
 
-# 4) 锁屏 UI 加入当前用户开机自启（共享 Windows 账户需先配置自动登录）
+# 5) 离线缓存目录：仅 SYSTEM/管理员可访问（kit 含 PIN 哈希，防标准用户读取）
+New-Item -ItemType Directory -Force "$InstallDir\offline" | Out-Null
+icacls "$InstallDir\offline" /inheritance:r /grant "SYSTEM:(OI)(CI)F" /grant "Administrators:(OI)(CI)F" | Out-Null
+
+# 6) 锁屏 UI 加入当前用户开机自启（共享 Windows 账户需先配置自动登录）
 $startup = [Environment]::GetFolderPath("Startup")
 $shell = New-Object -ComObject WScript.Shell
 $lnk = $shell.CreateShortcut((Join-Path $startup "HomeCtrlUI.lnk"))

@@ -56,7 +56,7 @@ public partial class WidgetWindow : Window
 
         CheckReminders(st.BalanceSeconds);
         _balance = st.BalanceSeconds;
-        NameText.Text = st.PersonName ?? "—";
+        NameText.Text = (st.Offline ? "[离线] " : "") + (st.PersonName ?? "—");
         UpdateTime();
     }
 

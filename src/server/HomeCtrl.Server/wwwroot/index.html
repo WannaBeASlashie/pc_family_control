@@ -145,6 +145,7 @@
         <div><label>单次连续上限（分钟，0 不限）</label><input id="polMax" type="number"></div>
         <div><label>滑动窗口长度（分钟，0 不启用）</label><input id="polSw" type="number" placeholder="如 120"></div>
         <div><label>窗口内最大用时（分钟，0 不启用）</label><input id="polSq" type="number" placeholder="如 45"></div>
+        <div><label>离线额度（分钟，空=全局默认，0=禁止离线）</label><input id="polOff" type="number" placeholder="默认"></div>
         <div><label>启用</label><select id="polEnabled"><option value="true">启用</option><option value="false">停用</option></select></div>
       </div>
       <p class="muted" style="font-size:13px;margin-top:6px">滑动窗口示例：长度 120、限额 45 = 最近 2 小时内最多累计上机 45 分钟（跨会话累计，到量锁定，窗口滑过旧用量后自动恢复）。</p>
@@ -341,12 +342,15 @@ function renderPolTable() {
       let wins = '-';
       try { const w = JSON.parse(p.allowedWindowsJson); if (w.length) wins = w.map(x => `${x.start}-${x.end}`).join(' / '); } catch {}
       const sliding = p.slidingWindowSeconds ? `${fmtSec(p.slidingQuotaSeconds)} / ${fmtSec(p.slidingWindowSeconds)}` : '不限';
+      const off = p.offlineQuotaSeconds === null || p.offlineQuotaSeconds === undefined ? '默认'
+                : p.offlineQuotaSeconds === 0 ? '禁止' : fmtSec(p.offlineQuotaSeconds);
       return `<tr class="${editingPolicyId === p.id ? 'amber' : ''}" style="cursor:pointer" onclick="selectPolicy(${p.id})">
         <td>${p.id}</td><td>${esc(p.name)}</td>
         <td>${p.weekdayQuotaSeconds ? fmtSec(p.weekdayQuotaSeconds) : '不限'}</td>
         <td>${p.weekendQuotaSeconds ? fmtSec(p.weekendQuotaSeconds) : '不限'}</td>
         <td>${p.maxSessionSeconds ? fmtSec(p.maxSessionSeconds) : '不限'}</td>
         <td>${esc(sliding)}</td>
+        <td>${esc(off)}</td>
         <td class="muted">${esc(wins)}</td>
         <td>${p.enabled ? '<span class="green">启用</span>' : '<span class="red">停用</span>'}</td></tr>`;
     }).join('');
@@ -363,6 +367,7 @@ function selectPolicy(id) {
   $('polMax').value = p.maxSessionSeconds / 60;
   $('polSw').value = p.slidingWindowSeconds / 60;
   $('polSq').value = p.slidingQuotaSeconds / 60;
+  $('polOff').value = p.offlineQuotaSeconds === null || p.offlineQuotaSeconds === undefined ? '' : p.offlineQuotaSeconds / 60;
   $('polEnabled').value = String(p.enabled);
   let wins = []; try { wins = JSON.parse(p.allowedWindowsJson); } catch {}
   $('winRows').innerHTML = '';
@@ -392,9 +397,11 @@ async function savePolicy() {
     const [s, e] = r.querySelectorAll('input');
     return { start: s.value || '00:00', end: e.value || '24:00' };
   });
+  const offRaw = $('polOff').value.trim();
   const body = { name: $('polName').value, weekdayQuotaMinutes: +$('polWd').value || 0,
     weekendQuotaMinutes: +$('polWe').value || 0, maxSessionMinutes: +$('polMax').value || 0,
     slidingWindowMinutes: +$('polSw').value || 0, slidingQuotaMinutes: +$('polSq').value || 0,
+    offlineQuotaMinutes: offRaw === '' ? null : (+offRaw || 0),
     enabled: $('polEnabled').value === 'true', windows };
   const r = editingPolicyId
     ? await api('PUT', `policies/${editingPolicyId}`, body)

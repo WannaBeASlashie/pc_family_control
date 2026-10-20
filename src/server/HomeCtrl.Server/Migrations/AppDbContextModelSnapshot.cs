@@ -202,6 +202,9 @@ namespace HomeCtrl.Server.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("OfflineQuotaSeconds")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("SlidingQuotaSeconds")
                         .HasColumnType("INTEGER");
 
@@ -230,6 +233,9 @@ namespace HomeCtrl.Server.Migrations
 
                     b.Property<long>("ChargedSeconds")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ClientRecordId")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("EndReason")
                         .HasColumnType("TEXT");
@@ -260,6 +266,10 @@ namespace HomeCtrl.Server.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClientRecordId")
+                        .IsUnique()
+                        .HasFilter("[ClientRecordId] IS NOT NULL");
 
                     b.HasIndex("MachineId", "Status");
 

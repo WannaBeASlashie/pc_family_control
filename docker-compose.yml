@@ -10,5 +10,8 @@ services:
       - ConnectionStrings__Default=Data Source=/data/homectrl.db
       - Policy__GraceSeconds=300            # 余额耗尽后的宽限期（秒）
       - Policy__TzOffsetHours=8             # 策略日期/时段的时区偏移（小时，中国=8）
+      - Offline__Enabled=true               # 离线额度总开关
+      - Offline__PersonDailySeconds=1800    # 每人每日离线上限（秒，策略可覆盖）
+      - Offline__MachineDailySeconds=5400   # 每台机器每日离线总上限（秒）
     volumes:
       - ./data:/data

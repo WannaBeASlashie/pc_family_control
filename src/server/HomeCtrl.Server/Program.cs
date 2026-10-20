@@ -117,13 +117,9 @@ app.MapGet("/health", () => "HomeCtrl Server");
 
 // ================= 客户端（受控机）接口 =================
 
-app.MapPost("/api/client/heartbeat", (HttpContext ctx, AppDbContext db) =>
+// 心跳/补账共用的负载构造：结算 + 策略 + 锁定指令 + 待执行指令 + 离线 kit
+object BuildHeartbeatPayload(AppDbContext db, Machine machine)
 {
-    var machine = AuthMachine(ctx, db);
-    if (machine is null) return Results.Unauthorized();
-
-    machine.LastSeenAt = DateTime.UtcNow;
-
     object? sessionInfo = null;
     var balance = 0L;
     var session = db.Sessions.Include(s => s.Person)
@@ -177,7 +173,129 @@ app.MapPost("/api/client/heartbeat", (HttpContext ctx, AppDbContext db) =>
         .Select(c => new { id = c.Id, action = c.Action, payload = c.Payload })
         .ToList();
 
-    return Results.Json(new { serverTime = DateTime.UtcNow, session = sessionInfo, balanceSeconds = balance, commands });
+    // 离线 kit：全部启用账户的离线档案（FR-17，Agent 断网时用于受限上机）
+    object? kit = null;
+    if (app.Configuration.GetValue("Offline:Enabled", true))
+    {
+        var polCache = db.Policies.ToList().ToDictionary(p => p.Id);
+        var defQuota = app.Configuration.GetValue("Offline:PersonDailySeconds", 1800L);
+        var kitPersons = db.Persons.Where(p => p.Enabled).ToList()
+            .Select(p =>
+            {
+                polCache.TryGetValue(p.PolicyId, out var pol);
+                return new
+                {
+                    cardNo = p.CardNo,
+                    displayName = p.DisplayName,
+                    pinHash = p.PinHash,
+                    balance = p.BalanceSeconds,
+                    quota = pol?.OfflineQuotaSeconds ?? defQuota
+                };
+            })
+            .ToList();
+        kit = new
+        {
+            generatedAt = DateTime.UtcNow,
+            maxAgeHours = app.Configuration.GetValue("Offline:KitMaxAgeHours", 72),
+            tzOffsetHours = app.Configuration.GetValue("Policy:TzOffsetHours", 8),
+            machineDailySeconds = app.Configuration.GetValue("Offline:MachineDailySeconds", 5400L),
+            persons = kitPersons
+        };
+    }
+
+    return new { serverTime = DateTime.UtcNow, session = sessionInfo, balanceSeconds = balance, commands, offlineKit = kit };
+}
+
+app.MapPost("/api/client/heartbeat", (HttpContext ctx, AppDbContext db) =>
+{
+    var machine = AuthMachine(ctx, db);
+    if (machine is null) return Results.Unauthorized();
+
+    machine.LastSeenAt = DateTime.UtcNow;
+    db.SaveChanges();
+    return Results.Json(BuildHeartbeatPayload(db, machine));
+});
+
+// 离线补账（FR-17）：Agent 重连时上报离线会话；按历史时间建会话行并扣费。
+// 已结束的补建 ended 会话；进行中的补建 active 会话（心跳结算自然接管，含回溯时长）。
+// 幂等：ClientRecordId 唯一；防篡改：早于 48h 的开始时间钳到当前，单条计费钳到额度×1.5。
+app.MapPost("/api/client/sync-offline", (SyncOfflineReq req, HttpContext ctx, AppDbContext db) =>
+{
+    var machine = AuthMachine(ctx, db);
+    if (machine is null) return Results.Unauthorized();
+    machine.LastSeenAt = DateTime.UtcNow;
+
+    var defQuota = app.Configuration.GetValue("Offline:PersonDailySeconds", 1800L);
+    var polCache = db.Policies.ToList().ToDictionary(p => p.Id);
+
+    foreach (var c in req.Completed ?? new List<OfflineCompletedReq>())
+    {
+        if (string.IsNullOrEmpty(c.RecordId) || db.Sessions.Any(s => s.ClientRecordId == c.RecordId)) continue;
+        var person = db.Persons.FirstOrDefault(p => p.CardNo == c.CardNo);
+        if (person is null)
+        {
+            db.AuditLogs.Add(new AuditLog { Ts = DateTime.UtcNow, Actor = $"machine:{machine.Id}", Action = "offline_sync", Detail = $"unknown card {c.CardNo}, skipped" });
+            continue;
+        }
+
+        var start = c.StartedAtUtc;
+        var end = c.EndedAtUtc;
+        var clamped = false;
+        if (start < DateTime.UtcNow.AddDays(-2)) { start = DateTime.UtcNow; clamped = true; }
+        if (end < start) end = start;
+        if (end > DateTime.UtcNow) end = DateTime.UtcNow;
+
+        polCache.TryGetValue(person.PolicyId, out var pol);
+        var quota = pol?.OfflineQuotaSeconds ?? defQuota;
+        var chargeCap = Math.Max(quota, defQuota) * 3 / 2;
+        var span = (long)(end - start).TotalSeconds;
+        var charged = Math.Min(span, chargeCap);
+        if (c.ChargedSeconds > 0) charged = Math.Min(charged, c.ChargedSeconds);
+
+        db.Sessions.Add(new Session
+        {
+            PersonId = person.Id, MachineId = machine.Id,
+            StartedAt = start, EndedAt = end, ChargedSeconds = charged,
+            EndReason = "offline_" + (c.EndReason ?? "sync"),
+            Status = SessionStatus.Ended, ClientRecordId = c.RecordId
+        });
+        person.BalanceSeconds = Math.Max(person.BalanceSeconds - charged, 0);
+        db.TimeLedger.Add(new TimeLedger
+        {
+            PersonId = person.Id, DeltaSeconds = -charged, Kind = LedgerKind.OfflineCharge,
+            Note = $"offline sync {c.RecordId}", CreatedAt = DateTime.UtcNow
+        });
+        db.AuditLogs.Add(new AuditLog
+        {
+            Ts = DateTime.UtcNow, Actor = $"machine:{machine.Id}", Action = "offline_sync",
+            Detail = $"person:{person.Id} charged:{charged} clamped:{clamped}"
+        });
+    }
+
+    if (req.Active is { } a && !string.IsNullOrEmpty(a.RecordId)
+        && !db.Sessions.Any(s => s.ClientRecordId == a.RecordId))
+    {
+        var person = db.Persons.FirstOrDefault(p => p.CardNo == a.CardNo);
+        if (person is not null)
+        {
+            var start = a.StartedAtUtc;
+            var clamped = false;
+            if (start < DateTime.UtcNow.AddDays(-2)) { start = DateTime.UtcNow; clamped = true; }
+            db.Sessions.Add(new Session
+            {
+                PersonId = person.Id, MachineId = machine.Id,
+                StartedAt = start, Status = SessionStatus.Active, ClientRecordId = a.RecordId
+            });
+            db.AuditLogs.Add(new AuditLog
+            {
+                Ts = DateTime.UtcNow, Actor = $"machine:{machine.Id}", Action = "offline_sync",
+                Detail = $"person:{person.Id} active session, clamped:{clamped}"
+            });
+        }
+    }
+
+    db.SaveChanges();
+    return Results.Json(BuildHeartbeatPayload(db, machine));
 });
 
 app.MapPost("/api/client/login", (LoginReq req, HttpContext ctx, AppDbContext db) =>
@@ -534,6 +652,7 @@ app.MapGet("/api/admin/policies", (HttpContext ctx, AppDbContext db, AdminAuth a
             maxSessionSeconds = p.MaxSessionSeconds,
             slidingWindowSeconds = p.SlidingWindowSeconds,
             slidingQuotaSeconds = p.SlidingQuotaSeconds,
+            offlineQuotaSeconds = p.OfflineQuotaSeconds,
             p.AllowedWindowsJson, p.Enabled
         })
         .ToList();
@@ -554,6 +673,7 @@ app.MapPost("/api/admin/policies", (PolicyReq req, HttpContext ctx, AppDbContext
         MaxSessionSeconds = Math.Max(req.MaxSessionMinutes, 0) * 60,
         SlidingWindowSeconds = Math.Max(req.SlidingWindowMinutes, 0) * 60,
         SlidingQuotaSeconds = Math.Max(req.SlidingQuotaMinutes, 0) * 60,
+        OfflineQuotaSeconds = req.OfflineQuotaMinutes is null ? null : Math.Max(req.OfflineQuotaMinutes.Value, 0) * 60,
         AllowedWindowsJson = WindowsJson(req.Windows),
         Enabled = req.Enabled,
         CreatedAt = DateTime.UtcNow,
@@ -578,6 +698,7 @@ app.MapPut("/api/admin/policies/{id}", (int id, PolicyReq req, HttpContext ctx, 
     p.MaxSessionSeconds = Math.Max(req.MaxSessionMinutes, 0) * 60;
     p.SlidingWindowSeconds = Math.Max(req.SlidingWindowMinutes, 0) * 60;
     p.SlidingQuotaSeconds = Math.Max(req.SlidingQuotaMinutes, 0) * 60;
+    p.OfflineQuotaSeconds = req.OfflineQuotaMinutes is null ? null : Math.Max(req.OfflineQuotaMinutes.Value, 0) * 60;
     p.AllowedWindowsJson = WindowsJson(req.Windows);
     p.Enabled = req.Enabled;
     p.UpdatedAt = DateTime.UtcNow;
@@ -696,6 +817,9 @@ record CreateMachineReq(string Name);
 record CommandReq(string Action, string? Text);
 record RequestTimeReq(int Minutes);
 record DecideReq(bool Approve, string? Note);
-record PolicyReq(string Name, long WeekdayQuotaMinutes, long WeekendQuotaMinutes, List<PolicyWindowReq>? Windows, long MaxSessionMinutes, bool Enabled, long SlidingWindowMinutes = 0, long SlidingQuotaMinutes = 0);
+record SyncOfflineReq(OfflineActiveReq? Active, List<OfflineCompletedReq>? Completed);
+record OfflineActiveReq(string RecordId, string CardNo, DateTime StartedAtUtc);
+record OfflineCompletedReq(string RecordId, string CardNo, DateTime StartedAtUtc, DateTime EndedAtUtc, long ChargedSeconds, string? EndReason);
+record PolicyReq(string Name, long WeekdayQuotaMinutes, long WeekendQuotaMinutes, List<PolicyWindowReq>? Windows, long MaxSessionMinutes, bool Enabled, long SlidingWindowMinutes = 0, long SlidingQuotaMinutes = 0, long? OfflineQuotaMinutes = null);
 record PolicyWindowReq(string Start, string End);
 record FailState(int Count, DateTime LockedUntil, DateTime LastFailAt);

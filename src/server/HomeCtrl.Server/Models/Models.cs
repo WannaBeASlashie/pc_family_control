@@ -25,6 +25,7 @@ public class Policy
     public long MaxSessionSeconds { get; set; }     // 0 = 不限
     public long SlidingWindowSeconds { get; set; }  // 滑动窗口长度（0=不启用，需与限额同时>0）
     public long SlidingQuotaSeconds { get; set; }   // 窗口内最大累计用时（0=不启用）
+    public long? OfflineQuotaSeconds { get; set; }  // 离线额度覆盖（NULL=用全局默认，0=禁止离线上机）
     public bool Enabled { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -54,6 +55,7 @@ public class Session
     public DateTime? LogoffSentAt { get; set; }
     public string? EndReason { get; set; }
     public string Status { get; set; } = SessionStatus.Active;
+    public string? ClientRecordId { get; set; }     // 离线补账记录 ID（幂等去重）
 }
 
 public class Command
@@ -140,6 +142,7 @@ public static class LedgerKind
     public const string ParentGrant = "parent_grant";
     public const string ParentDeduct = "parent_deduct";
     public const string SessionCharge = "session_charge";
+    public const string OfflineCharge = "offline_charge";
 }
 
 public static class EndReason

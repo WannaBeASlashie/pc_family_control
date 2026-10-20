@@ -39,7 +39,14 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
-            FooterText.Text = st.ServerOnline ? "" : "⚠ 无法连接服务器，请稍候或联系家长";
+            FooterText.Text = !st.ServerOnline
+                ? (st.Offline ? "离线模式（受限上机）" : "⚠ 无法连接服务器，请稍候或联系家长")
+                : "";
+
+            // 离线模式不可申请加时
+            Req15Btn.IsEnabled = !st.Offline;
+            Req30Btn.IsEnabled = !st.Offline;
+            OfflineReqHint.Visibility = st.Offline ? Visibility.Visible : Visibility.Collapsed;
 
             if (st.SessionId is null)
             {

@@ -7,4 +7,5 @@ public record StateSnapshot(
     string? PersonName,
     long BalanceSeconds,
     bool ServerOnline,
-    string? Message);
+    string? Message,
+    bool Offline);

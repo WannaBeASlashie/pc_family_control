@@ -9,7 +9,9 @@ public class ServerApiClient
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
-    private readonly HttpClient _http = new();
+    // 受控机与服务器是局域网直连：禁用系统代理（Clash 等代理会拖慢故障检测，
+    // 离线模式的心跳失败判定依赖"快速失败"）
+    private readonly HttpClient _http = new(new HttpClientHandler { UseProxy = false });
     private readonly string _machineId;
     private readonly string _secret;
 

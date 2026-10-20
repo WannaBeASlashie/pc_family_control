@@ -21,18 +21,20 @@ public class PipeServerService : BackgroundService
     private readonly AgentState _state;
     private readonly ServerApiClient _api;
     private readonly AgentGate _gate;
+    private readonly OfflineManager _offline;
     private readonly ILogger<PipeServerService> _log;
     private readonly int _watchdogSeconds;
     private readonly object _writeLock = new();
     private StreamWriter? _writer;                      // 当前连接的写入器
     private DateTime? _uiGoneSinceUtc;                  // UI 断开时刻（null=在线或从未连过）
 
-    public PipeServerService(AgentState state, ServerApiClient api, AgentGate gate,
+    public PipeServerService(AgentState state, ServerApiClient api, AgentGate gate, OfflineManager offline,
         IConfiguration cfg, ILogger<PipeServerService> log)
     {
         _state = state;
         _api = api;
         _gate = gate;
+        _offline = offline;
         _log = log;
         _watchdogSeconds = Math.Clamp(cfg.GetValue("UiWatchdogSeconds", 60), 10, 600);
     }
@@ -109,8 +111,16 @@ public class PipeServerService : BackgroundService
                     await _gate.Sem.WaitAsync(ct);
                     try
                     {
-                        await _api.PostAsync("/api/client/logout", new { });
-                        _state.ApplyServerState(null, 0);
+                        if (_offline.IsOfflineMode)
+                        {
+                            // 离线模式：本地结束会话（服务器不可达，记录留待补账）
+                            _offline.Logout();
+                        }
+                        else
+                        {
+                            await _api.PostAsync("/api/client/logout", new { });
+                            _state.ApplyServerState(null, 0);
+                        }
                     }
                     finally { _gate.Sem.Release(); }
                     _log.LogInformation("UI 断开超过 {Sec}s 且会话活跃，会话已自动结束", _watchdogSeconds);
@@ -160,9 +170,17 @@ public class PipeServerService : BackgroundService
                     await _gate.Sem.WaitAsync();
                     try
                     {
+                        // 离线模式：本地校验 PIN 与离线额度
+                        if (_offline.IsOfflineMode)
+                        {
+                            var (ok, reason) = _offline.TryLogin(cardNo, pin);
+                            return Reply(id, true, new { ok, reason, offline = true });
+                        }
+
                         var resp = await _api.PostAsync<LoginResp>("/api/client/login", new { cardNo, pin });
                         if (resp is not null && resp.Ok && resp.SessionId is not null)
                         {
+                            _state.SetCardNo(cardNo);
                             _state.ApplyServerState(
                                 new HeartbeatSession(resp.SessionId.Value, resp.Person ?? "", DateTime.UtcNow),
                                 resp.BalanceSeconds);
@@ -179,6 +197,13 @@ public class PipeServerService : BackgroundService
                     await _gate.Sem.WaitAsync();
                     try
                     {
+                        // 离线模式：本地记账（离线开始的会话）或打标重连补 logout（收养的会话）
+                        if (_offline.IsOfflineMode)
+                        {
+                            _offline.Logout();
+                            return Reply(id, true, new { ok = true, chargedSeconds = 0, offline = true });
+                        }
+
                         var resp = await _api.PostAsync<LogoutResp>("/api/client/logout", new { });
                         _state.ApplyServerState(null, 0);
                         return Reply(id, true, new { ok = true, chargedSeconds = resp?.ChargedSeconds ?? 0 });
@@ -188,6 +213,9 @@ public class PipeServerService : BackgroundService
 
                 case "requestTime":
                 {
+                    if (_offline.IsOfflineMode)
+                        return Reply(id, true, new { ok = false, reason = "离线模式暂不可申请加时" });
+
                     var minutes = root.TryGetProperty("minutes", out var m) && m.ValueKind == JsonValueKind.Number
                         ? m.GetInt32() : 15;
                     await _gate.Sem.WaitAsync();
