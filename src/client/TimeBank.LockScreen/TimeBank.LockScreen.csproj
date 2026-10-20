@@ -5,8 +5,16 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>WillBeyond.TimeBank.LockScreen</RootNamespace>
   </PropertyGroup>
+
+  <!-- 去掉 WinForms 注入的隐式 using，避免 Application/KeyEventArgs 与 WPF 二义；
+       只保留程序集引用，Screen/Rectangle 在代码里用全限定名。 -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
 </Project>

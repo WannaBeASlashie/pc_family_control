@@ -3,12 +3,18 @@ using System.Windows.Input;
 
 namespace WillBeyond.TimeBank.LockScreen;
 
-/// <summary>全屏锁屏窗口：无标题栏、置顶、禁关闭（生产模式）。</summary>
+/// <summary>
+/// 全屏锁屏窗口：无标题栏、置顶、禁关闭（生产模式）。
+/// 加固：覆盖主显示器全幅（含任务栏）；其余显示器各铺一块静态遮罩；
+/// 生产模式下安装低级键盘钩子拦截 Win/Alt+Tab/Alt+F4/Ctrl+Esc。
+/// </summary>
 public partial class MainWindow : Window
 {
     private readonly bool _testMode;   // HOMECTRL_TEST=1 时为调试模式：允许 ESC 退出
     private readonly PipeClient _pipe = new();
     private WidgetWindow? _widget;
+    private readonly List<LockOverlayWindow> _overlays = new();
+    private LockGuard? _guard;
 
     public MainWindow()
     {
@@ -16,7 +22,47 @@ public partial class MainWindow : Window
         _testMode = Environment.GetEnvironmentVariable("HOMECTRL_TEST") == "1";
         if (_testMode) TestHint.Visibility = Visibility.Visible;
         Closing += (_, e) => e.Cancel = !_testMode; // 生产模式禁止 Alt+F4 关闭
+
+        PositionToPrimaryScreen();
+
+        if (!_testMode)
+        {
+            foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+            {
+                if (screen.Primary) continue;
+                _overlays.Add(new LockOverlayWindow(screen.Bounds));
+            }
+            _guard = new LockGuard();
+        }
+
+        IsVisibleChanged += OnIsVisibleChanged;
         Loaded += async (_, _) => await StartAsync();
+    }
+
+    /// <summary>锁屏铺满主显示器物理分辨率（含任务栏区域），避免 Maximized 只铺工作区。</summary>
+    private void PositionToPrimaryScreen()
+    {
+        var b = System.Windows.Forms.Screen.PrimaryScreen?.Bounds
+            ?? new System.Drawing.Rectangle(0, 0,
+                (int)SystemParameters.PrimaryScreenWidth,
+                (int)SystemParameters.PrimaryScreenHeight);
+        WindowState = WindowState.Normal;
+        Left = b.Left;
+        Top = b.Top;
+        Width = b.Width;
+        Height = b.Height;
+    }
+
+    /// <summary>锁屏可见 ⇔ 键盘钩子激活 + 副屏遮罩显示；解锁后全部放行/隐藏。</summary>
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        var visible = (bool)e.NewValue;
+        if (_guard is not null) _guard.Active = visible;
+        foreach (var overlay in _overlays)
+        {
+            if (visible) overlay.Show();
+            else overlay.Hide();
+        }
     }
 
     private async Task StartAsync()
