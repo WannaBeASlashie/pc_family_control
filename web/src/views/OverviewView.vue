@@ -48,36 +48,36 @@ async function approve(id: number): Promise<void> {
     </div>
   </div>
 
-  <el-row :gutter="16" style="margin-top: 16px">
-    <el-col :xs="12" :sm="12" :md="6">
-      <el-card class="stat-card wb-card" shadow="never">
+  <el-row :gutter="16" style="margin-top: 16px; align-items: stretch">
+    <el-col :xs="12" :sm="12" :md="6" style="display: flex">
+      <el-card class="stat-card wb-card" shadow="never" style="flex: 1; width: 100%">
         <div class="stat-label">Machines online</div>
         <div class="stat-value">{{ online }}</div>
       </el-card>
     </el-col>
-    <el-col :xs="12" :sm="12" :md="6">
-      <el-card class="stat-card wb-card" shadow="never">
+    <el-col :xs="12" :sm="12" :md="6" style="display: flex">
+      <el-card class="stat-card wb-card" shadow="never" style="flex: 1; width: 100%">
         <div class="stat-label">Active sessions</div>
         <div class="stat-value">{{ sessionCount }}</div>
       </el-card>
     </el-col>
-    <el-col :xs="12" :sm="12" :md="6">
-      <el-card class="stat-card wb-card" shadow="never" style="cursor: pointer" @click="router.push('/requests')">
+    <el-col :xs="12" :sm="12" :md="6" style="display: flex">
+      <el-card class="stat-card wb-card" shadow="never" style="flex: 1; width: 100%; cursor: pointer" @click="router.push('/requests')">
         <div class="stat-label">Pending requests</div>
         <div class="stat-value" :style="{ color: pendingCount > 0 ? '#ef4444' : undefined }">{{ pendingCount }}</div>
       </el-card>
     </el-col>
-    <el-col :xs="12" :sm="12" :md="6">
-      <el-card class="stat-card wb-card" shadow="never">
+    <el-col :xs="12" :sm="12" :md="6" style="display: flex">
+      <el-card class="stat-card wb-card" shadow="never" style="flex: 1; width: 100%">
         <div class="stat-label">Accounts</div>
         <div class="stat-value">{{ accountCount }}</div>
       </el-card>
     </el-col>
   </el-row>
 
-  <el-row :gutter="16" style="margin-top: 16px">
-    <el-col :xs="24" :md="14">
-      <el-card class="wb-card">
+  <el-row :gutter="16" style="margin-top: 16px; align-items: stretch">
+    <el-col :xs="24" :md="14" style="display: flex">
+      <el-card class="wb-card" style="flex: 1; width: 100%">
         <template #header>
           <div class="card-head">
             <span>Recent sessions</span>
@@ -104,8 +104,8 @@ async function approve(id: number): Promise<void> {
       </el-card>
     </el-col>
 
-    <el-col :xs="24" :md="10">
-      <el-card class="wb-card">
+    <el-col :xs="24" :md="10" style="display: flex">
+      <el-card class="wb-card" style="flex: 1; width: 100%">
         <template #header>
           <div class="card-head">
             <span>Pending requests</span>
@@ -127,10 +127,10 @@ async function approve(id: number): Promise<void> {
     </el-col>
   </el-row>
 
-  <el-row :gutter="16" style="margin-top: 16px">
-    <el-col v-for="e in entries" :key="e.path" :xs="12" :sm="12" :md="6">
-      <el-card shadow="hover" class="module-card wb-card" @click="router.push(e.path)">
-        <div style="display: flex; align-items: center; gap: 12px">
+  <el-row :gutter="16" style="margin-top: 16px; align-items: stretch">
+    <el-col v-for="e in entries" :key="e.path" :xs="24" :sm="12" :lg="6" style="display: flex">
+      <el-card shadow="hover" class="module-card wb-card" style="flex: 1; width: 100%" @click="router.push(e.path)">
+        <div style="display: flex; align-items: center; gap: 12px; height: 100%">
           <div class="module-icon">
             <el-icon :size="22"><component :is="e.icon" /></el-icon>
           </div>
