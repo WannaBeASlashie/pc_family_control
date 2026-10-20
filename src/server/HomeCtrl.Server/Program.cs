@@ -614,8 +614,22 @@ app.MapPost("/api/admin/machines", (CreateMachineReq req, HttpContext ctx, AppDb
     return Results.Json(new { ok = true, id = machine.Id, secret });
 });
 
-app.MapPost("/api/admin/machines/{id}/command", (int id, CommandReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
+// 删除机器：拒绝删除有进行中会话的机器；其指令与历史会话一并清除
+app.MapDelete("/api/admin/machines/{id}", (int id, HttpContext ctx, AppDbContext db, AdminAuth auth) =>
 {
+    if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
+    var machine = db.Machines.Find(id);
+    if (machine is null) return Results.NotFound();
+    if (db.Sessions.Any(s => s.MachineId == id && s.Status == SessionStatus.Active))
+        return Results.Json(new { ok = false, reason = "该机器有进行中的会话，请先强制下机" });
+
+    db.Commands.RemoveRange(db.Commands.Where(c => c.MachineId == id));
+    db.Machines.Remove(machine);   // 历史会话由 FK 级联删除
+    db.SaveChanges();
+    return Results.Json(new { ok = true });
+});
+
+app.MapPost("/api/admin/machines/{id}/command", (int id, CommandReq req, HttpContext ctx, AppDbContext db, AdminAuth auth) =>{
     if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
     var machine = db.Machines.Find(id);
     if (machine is null) return Results.NotFound();

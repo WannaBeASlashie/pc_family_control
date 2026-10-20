@@ -37,9 +37,12 @@ public class SessionReaper : BackgroundService
                 foreach (var s in active)
                 {
                     var machine = db.Machines.Find(s.MachineId);
-                    if (machine?.LastSeenAt is not DateTime seen || seen >= cutoff) continue;
+                    // 最后联系时间：有心跳用心跳；从未心跳的机器（只调过 login 等接口）
+                    // 用会话开始时间兜底，同样超时回收，防止僵尸会话永久挂起
+                    var lastContact = machine?.LastSeenAt ?? s.StartedAt;
+                    if (lastContact >= cutoff) continue;
 
-                    Billing.Settle(db, s, seen.AddSeconds(30));
+                    Billing.Settle(db, s, lastContact.AddSeconds(30));
                     Billing.End(db, s, EndReason.MachineOff);
                     _log.LogInformation("reaped session {SessionId} person {PersonId}", s.Id, s.PersonId);
                 }
