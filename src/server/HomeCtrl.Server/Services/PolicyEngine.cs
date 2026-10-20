@@ -33,17 +33,17 @@ public static class PolicyEngine
             ? policy.WeekendQuotaSeconds
             : policy.WeekdayQuotaSeconds;
         var slidingOn = policy.SlidingWindowSeconds > 0 && policy.SlidingQuotaSeconds > 0;
-        List<Session>? recent = null;
+        List<SessionSlice>? recent = null;
         if (quota > 0 || slidingOn)
         {
-            // 取最近 200 条会话在内存中计算：规避 SQLite DateTime SQL 比较的
-            // provider 差异，同时 EF 的 identity resolution 会带回 ChangeTracker 里
-            // 刚 Settle 但尚未保存的当前会话计费。
-            // 200 条足以覆盖任何正常的一天（防"刷短会话挤掉消费记录"绕过每日额度）。
+            // 全量加载该账户的会话（轻量投影，仅取计费所需三字段）。
+            // - 按账户（跨机器）累计：D2"换机器不能续命"
+            // - 不做条数截断：任何截断都存在"刷登录挤掉旧用量"的理论绕过；
+            //   单账户终身会话量（万级）投影后仅 ~1MB，心跳频率下性能无压力
+            // - 心跳路径中 Settle 已先落库（见 Program.cs），此处读到的计费是最新值
             recent = db.Sessions
                 .Where(s => s.PersonId == person.Id)
-                .OrderByDescending(s => s.StartedAt)
-                .Take(200)
+                .Select(s => new SessionSlice(s.StartedAt, s.EndedAt, s.ChargedSeconds))
                 .ToList();
         }
 
@@ -123,3 +123,6 @@ public static class PolicyEngine
         return true;
     }
 }
+
+/// <summary>策略计算所需的会话切片（轻量投影，降低全量加载的内存占用）。</summary>
+public sealed record SessionSlice(DateTime StartedAt, DateTime? EndedAt, long ChargedSeconds);
