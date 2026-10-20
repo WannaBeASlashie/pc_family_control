@@ -309,28 +309,48 @@ scripts/
 
 ## 5. 部署指引
 
+### 5.0 部署前检查清单
+
+- [ ] 家庭服务器已装 Docker + docker compose；首次构建需联网拉取 node/dotnet 镜像与 npm 包
+- [ ] 服务器固定 IP（如 192.168.1.10），8080 端口仅对局域网开放
+- [ ] 仓库已到服务器（`git clone` 或打包上传）
+- [ ] 已确定家长管理密码（不要用 changeme）
+- [ ] 3 台受控机均为 Win10 Pro，且能登录管理员账户
+- [ ] 已确定共享 Windows 账户（**标准用户**）与开机自动登录方案
+
 ### 5.1 前置条件
 
 | 组件 | 要求 |
 |---|---|
-| 服务器 | Docker + docker compose，固定 IP（如 192.168.1.10） |
-| 受控机 | Windows 10 Pro；.NET 8 运行时（安装脚本用 SDK 发布后可不装） |
-| 网络策略 | 服务器 8080 端口仅向局域网开放；**不要映射公网** |
+| 服务器 | Docker + docker compose，固定 IP；x64/arm64 均可 |
+| 受控机 | Windows 10 Pro；安装脚本需 .NET 8 SDK（仅安装时使用） |
+| 网络 | 受控机与服务器同网段；8080 仅内网，**不要映射公网** |
+| 浏览器 | 现代浏览器（控制台为 Vue SPA） |
+
+> 服务器**不需要 Node**：管理控制台在镜像构建阶段由 node:20 编译并打包进镜像。
+> 内网拉取 npm 慢时，可在仓库根 `.env` 写 `NPM_REGISTRY=https://registry.npmmirror.com` 后重新构建。
 
 ### 5.2 服务端部署
 
 ```bash
-# 仓库根目录
-docker compose up -d --build
-# 首次启动自动：建库（Migrations）+ 种子默认策略
-# 必改：docker-compose.yml 里 Admin__Password
+git clone <repo> timebank && cd timebank
+# 必改：docker-compose.yml -> Admin__Password
+docker compose up -d --build        # 首次约 2-5 分钟（含前端构建）
+docker compose logs -f timebank     # 应看到 Now listening on http://0.0.0.0:8080
 ```
 
-验证：浏览器打开 `http://<服务器IP>:8080`，能用新密码登录即成功。
+首次启动自动：建库（Migrations）+ 种子默认策略（不限额度）。
+
+**验证（部署完成的判定标准）**：
+
+1. 浏览器打开 `http://<服务器IP>:8080` → 出现 TimeBank 登录页
+2. 用配置的密码登录 → 总览页正常（机器 0/N、默认策略 1 条）
+3. 直接访问 `http://<服务器IP>:8080/policies` 并刷新 → 页面正常（history 路由 fallback）
+4. `curl http://<服务器IP>:8080/health` → `TimeBank Server`
 
 ### 5.3 受控机安装（每台）
 
-1. 在控制台「机器」页注册机器，**记下 id 和 secret**（只显示一次）
+1. 控制台 Machines 页注册机器，**记下 id 和 secret**（只显示一次）
 2. 把仓库拷到受控机，管理员 PowerShell：
 
 ```powershell
@@ -341,16 +361,17 @@ docker compose up -d --build
 
 脚本自动：发布 Agent/UI → 写配置 → 注册服务（**名称即在此伪装**，含崩溃自动重启）→ UI 加入当前用户自启。
 
-3. 配置共享 Windows 账户**自动登录**（`netplwiz`），账户类型**标准用户**（关键！管理员账户会破坏全部防护）
-4. 重启验证：开机自动登录 → 全屏锁屏出现
+3. 配置共享 Windows 账户**自动登录**（`netplwiz`），账户类型必须是**标准用户**（管理员账户会破坏全部防护）
+4. 确认受控机时间与服务器相差 **< 2 分钟**（HMAC 时间窗，Windows 默认自动同步即可）
+5. 重启验证：开机自动登录 → 全屏锁屏（TimeBank）→ 测试账户上机
 
-### 5.4 初始化
+### 5.4 初始化（约 10 分钟）
 
-控制台操作顺序建议：
-
-1. 「策略」：基于默认策略调整，或新建（例：上学日 30 分钟/天 + 19:00-21:00 时段；周末 2 小时/天 + 滑动窗口 120 分钟内最多 60 分钟）
-2. 「账户」：为每个孩子建卡号+PIN+初始时长+策略
-3. 试跑：锁屏登录一次，控制台看会话出现、计时走动
+1. 「策略」：调整默认策略或新建（示例 A 上学日：工作日 30 分钟/天 + 19:00-21:00；示例 B 周末：120 分钟/天 + 滑动窗口 120 分钟内最多 60 分钟）
+2. 「账户」：每个孩子建卡号 + PIN + 初始时长 + 策略
+3. 「机器」：逐台注册并完成 5.3 安装
+4. **端到端试跑**：锁屏上机 → 控制台看到在线/会话/计时 → 锁屏下机 → 记录页出现会话
+5. 安全检查：孩子使用标准账户；家长密码已修改；服务器 8080 未映射公网
 
 ### 5.5 日常使用（家长）
 
@@ -364,30 +385,47 @@ docker compose up -d --build
 | 下班关机 | 机器页「关机」（有确认） |
 | 查历史 | 记录页（最近 50 条会话） |
 
-### 5.6 升级
+### 5.6 升级与回滚
 
 ```bash
-# 服务器
-git pull && docker compose up -d --build   # 迁移自动应用
-
-# 受控机：重跑 install-client.ps1（脚本会先停旧服务再发布，幂等）
+# 1. 先备份（见 5.7）
+# 2. 拉新代码并重建
+git pull
+docker compose up -d --build
 ```
+
+- 数据库迁移随容器启动自动应用（**仅向前**）
+- 受控机升级：重跑 `install-client.ps1`（先停服务再发布，幂等）
+- 回滚：`git checkout <上一个提交>` → `docker compose up -d --build`，并用升级前备份恢复 `data/`（迁移不会自动回退）
 
 ### 5.7 备份与恢复
 
-数据库是单文件：`data/timebank.db`（建议连 `-wal`/`-shm` 一起在停机或低频时拷贝）。恢复 = 停容器 → 覆盖文件 → 起容器。
+- 全部数据在 `./data`（`timebank.db` + `-wal`/`-shm`）
+- 一致性备份（推荐）：
+
+```bash
+docker compose stop timebank
+cp -r data "backup-$(date +%F)"
+docker compose start timebank
+```
+
+- 恢复：停容器 → 用备份覆盖 `data/` → 起容器
+- 建议：每周一次 + **每次升级前必做**
 
 ### 5.8 故障排查
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| 锁屏显示"无法连接服务器" | 服务端/网络问题 | 检查 `docker ps`、ping 服务器；看容器日志 |
+| 控制台 404 / 白屏 | 镜像里没有前端构建产物（旧镜像） | `docker compose build --no-cache && docker compose up -d` |
+| Docker 构建卡在 npm install | 网络 | 设 `NPM_REGISTRY` 镜像源（见 5.1）后重建 |
+| 锁屏显示"无法连接服务器" | 服务端/网络问题 | `docker ps`、ping 服务器、看容器日志 |
 | 锁屏显示"本机管控服务未运行" | Agent 服务没起来 | `sc query <服务名>`；Windows 事件日志看 TimeBank.Agent 来源 |
-| 机器一直离线 | Agent 心跳失败 | 同上；确认 appsettings 的 Server 配置 |
-| "在线 0/N 但上机 1"（持续） | 僵尸会话 | v1.2 已修复自动回收；仍异常看容器日志 reaper 报错 |
+| 机器一直离线 | Agent 心跳失败 / 时差 >2 分钟 / secret 错 | 校时；核对 `appsettings.json`；`curl .../health` |
+| "在线 0/N 但上机 1"（持续） | 僵尸会话 | 已在 v1.2 修复自动回收；仍异常看容器日志 reaper |
 | 充值了没解锁 | unlock 指令未达 | 机器在线则等 10s；离线则指令过期，孩子重登即可 |
+| 登录一直密码错误 | 改了 compose 但没重建容器 | 改 env 后 `docker compose up -d` |
 | 忘记孩子 PIN | — | 账户页编辑里重设 PIN |
-| 忘记家长密码 | — | 改 compose 的 `Admin__Password` 重启容器 |
+| 忘记家长密码 | — | 改 compose 的 `Admin__Password` 后 `docker compose up -d` |
 
 ### 5.9 开发者指南
 

@@ -1,7 +1,8 @@
 FROM node:20-alpine AS web
+ARG NPM_REGISTRY=https://registry.npmjs.org
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci --no-fund --no-audit
+RUN npm config set registry "$NPM_REGISTRY" && npm ci --no-fund --no-audit
 COPY web/ ./
 RUN npm run build
 

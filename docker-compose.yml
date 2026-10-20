@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: src/server/TimeBank.Server/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
     container_name: timebank
     restart: unless-stopped
     ports:

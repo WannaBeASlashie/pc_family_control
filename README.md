@@ -45,8 +45,14 @@ docker-compose.yml             服务端部署（web 在镜像内构建）
 ### 1. 服务端（家庭服务器，需 Docker）
 
 ```bash
-docker compose up -d --build      # 端口 8080，数据在 ./data/timebank.db
+# 必改：docker-compose.yml -> Admin__Password
+docker compose up -d --build      # 首次 2-5 分钟（镜像内构建 Vue 控制台）
+docker compose logs -f timebank   # 看到 listening on :8080 即启动
 ```
+
+- 数据在 `./data/timebank.db`；浏览器打开 `http://<服务器IP>:8080` 验证登录页
+- npm 拉取慢时在仓库根建 `.env` 写 `NPM_REGISTRY=https://registry.npmmirror.com` 后重建
+- 完整部署/升级/回滚/备份/排障清单见 **[manual.md §5](docs/manual.md#5-部署指引)**
 
 开发模式（本机 .NET 8 SDK，控制台用 Vite 热更新）：
 
