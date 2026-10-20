@@ -78,8 +78,8 @@
 | FR-12/13 | 任务、积分、兑换 | 预留（表结构 persons.points / points_ledger） |
 | FR-14 | 报表（会话记录已具备；图表化 P2） | ◐ |
 | FR-15 | 机器管理（注册/密钥/在线状态/远程指令/删除） | ✅ |
-| FR-16 | 防绕过（标准用户前提 + SYSTEM 服务 + 指令 TTL + 看门狗） | ✅（进程拉活 P2） |
-| FR-17 | 离线降级（断网按缓存额度放行） | 未做 |
+| FR-16 | 防绕过（标准用户前提 + SYSTEM 服务 + 指令 TTL + 看门狗 + 进程守护） | ✅ |
+| FR-17 | 离线降级（断网按缓存额度放行） | ✅ |
 | FR-18 | 审计日志（登录/下机/审批/异常 + 保留清理） | ✅ |
 | FR-19 | 空闲暂停（N 分钟无输入暂停计费） | 未做 |
 | FR-20 | 应急解锁码 | 未做 |
@@ -250,12 +250,15 @@ src/server/TimeBank.Server          服务端（ASP.NET Core Minimal API）
 src/client/TimeBank.Agent           客户端服务（Worker Service）
   HeartbeatWorker.cs                心跳循环 + 指令执行
   PipeServerService.cs              管道 IPC（接受循环 + 看门狗）
+  UiGuardianService.cs              UI 进程守护（被杀数秒内用会话 token 重拉）
   AgentGate.cs                      信号量：串行化服务端交互
   AgentState.cs                     状态机 locked=无会话|超限|家长锁定
   ServerApiClient.cs                HMAC 签名 HTTP 客户端
-  Win32.cs                          WTSGetActiveConsoleSessionId/Logoff
+  Win32.cs                          WTS 会话 / 注销 / CreateProcessAsUser
 src/client/TimeBank.LockScreen      锁屏 UI（WPF）
   MainWindow                        登录面板 / 耗尽面板（申请加时）
+  LockGuard.cs                      低级键盘钩子（拦 Win/Alt+Tab/Alt+F4/Ctrl+Esc）
+  LockOverlayWindow.cs              副显示器静态锁屏遮罩
   WidgetWindow                      右上角剩余时间小组件
   ToastWindow                       10/5/1 分钟提醒
   PipeClient.cs                     管道客户端（请求-响应 + 事件分发）
@@ -295,9 +298,9 @@ scripts/
 
 ### 4.4 已知限制与边界行为
 
-1. 锁屏已铺满所有显示器、全幅覆盖任务栏，并用低级键盘钩子拦截 Win / Alt+Tab / Alt+F4 / Alt+Esc / Ctrl+Esc / Ctrl+Shift+Esc；仍无法拦截 Ctrl+Alt+Del（安全桌面，Kiosk P3），且 UI 进程被强杀时锁屏会消失（进程拉活 P2）
-2. UI 被结束后不自动重启（进程拉活 P2）；期间桌面无遮罩但计费已停
-3. 断网无法上机（离线额度 P2）
+1. 锁屏已铺满所有显示器、全幅覆盖任务栏，并用低级键盘钩子拦截 Win / Alt+Tab / Alt+F4 / Alt+Esc / Ctrl+Esc / Ctrl+Shift+Esc；Ctrl+Alt+Del 安全桌面仍在，但其中的「任务管理器」已通过 `DisableTaskMgr=1` 移除（标准用户无杀进程入口）
+2. UI 进程被强杀时，Agent 守护会在数秒内用会话 token 重拉锁屏（`CreateProcessAsUser`）；若重拉持续失败，60s 看门狗停表防白嫖
+3. 断网可凭离线额度上机（v2.0 离线模式）
 4. 手动注销 Windows ≤60s 延迟停表；Win+L 锁屏期间照常计费（空闲暂停 P2）
 5. 单次上限 vs 加时：临近上限时获批加时，解锁后可能立即被 session_limit 再锁（下机重登即重置）
 6. 耗尽后的宽限期（默认 5 分钟）计入每日/滑动额度

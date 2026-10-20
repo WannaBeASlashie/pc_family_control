@@ -12,5 +12,6 @@ builder.Services.AddSingleton<OfflineManager>();
 builder.Services.AddSingleton<ServerApiClient>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 builder.Services.AddHostedService<PipeServerService>();
+builder.Services.AddHostedService<UiGuardianService>();
 
 builder.Build().Run();

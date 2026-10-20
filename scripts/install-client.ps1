@@ -14,7 +14,8 @@ param(
     [string]$BaseUrl = "http://192.168.1.10:8080",
     [string]$MachineId = "1",
     [string]$Secret = "",
-    [string]$InstallDir = "C:\ProgramData\TimeBank"
+    [string]$InstallDir = "C:\ProgramData\TimeBank",
+    [switch]$KeepTaskManager
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,6 +53,8 @@ if ($LASTEXITCODE -ne 0) { throw "LockScreen publish failed" }
     Agent            = @{ ServiceName = $ServiceName }
     Server           = @{ BaseUrl = $BaseUrl; MachineId = $MachineId; Secret = $Secret }
     HeartbeatSeconds = 10
+    UiGuardianEnabled   = $true
+    UiGuardianPollSeconds = 3
 } | ConvertTo-Json -Depth 5 | Set-Content "$InstallDir\agent\appsettings.json" -Encoding UTF8
 
 # 4) 注册 Windows 服务（名称即在此伪装）+ 崩溃自动重启
@@ -64,7 +67,16 @@ sc.exe start $ServiceName
 New-Item -ItemType Directory -Force "$InstallDir\offline" | Out-Null
 icacls "$InstallDir\offline" /inheritance:r /grant "SYSTEM:(OI)(CI)F" /grant "Administrators:(OI)(CI)F" | Out-Null
 
-# 6) Add UI to current user startup (shared account needs auto-login)
+# 6) Hardening: remove Task Manager from the Ctrl+Alt+Del secure screen (and block taskmgr/Ctrl+Shift+Esc),
+#    so a standard user has no way to kill the lock screen process.  Opt out with -KeepTaskManager.
+if (-not $KeepTaskManager) {
+    $pol = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System"
+    New-Item -Path $pol -Force | Out-Null
+    New-ItemProperty -Path $pol -Name "DisableTaskMgr" -Value 1 -PropertyType DWord -Force | Out-Null
+    Write-Host ">> Disabled Task Manager (DisableTaskMgr=1)."
+}
+
+# 7) Add UI to current user startup (shared account needs auto-login)
 $startup = [Environment]::GetFolderPath("Startup")
 $shell = New-Object -ComObject WScript.Shell
 $lnk = $shell.CreateShortcut((Join-Path $startup "TimeBankUI.lnk"))
@@ -77,3 +89,5 @@ Write-Host "Done. Service [$DisplayName] ($ServiceName); UI added to current use
 Write-Host "Notes:"
 Write-Host " 1. Configure auto-login for the shared Windows account (netplwiz); it MUST be a standard user."
 Write-Host " 2. Lock screen hardens itself: covers all monitors + taskbar, blocks Win/Alt+Tab/Alt+F4/Ctrl+Esc."
+Write-Host " 3. UI guardian: if TimeBank.LockScreen is killed, the agent relaunches it within a few seconds."
+Write-Host " 4. Task Manager is disabled by default (rerun with -KeepTaskManager to skip this)."
