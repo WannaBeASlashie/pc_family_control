@@ -25,7 +25,7 @@ using (var scope = app.Services.CreateScope())
     {
         db.Policies.Add(new Policy
         {
-            Name = "默认（不限）",
+            Name = "Default (unlimited)",
             AllowedWindowsJson = "[{\"start\":\"00:00\",\"end\":\"24:00\"}]",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -41,7 +41,7 @@ app.UseStaticFiles();
 if ((app.Configuration["Admin:Password"] ?? "changeme") == "changeme")
 {
     app.Logger.LogWarning("==========================================================");
-    app.Logger.LogWarning(" 管理端密码仍为默认值 changeme，请通过环境变量 Admin__Password 修改！");
+    app.Logger.LogWarning(" Admin password is still the default 'changeme' - set Admin__Password!");
     app.Logger.LogWarning("==========================================================");
 }
 
@@ -304,11 +304,11 @@ app.MapPost("/api/client/login", (LoginReq req, HttpContext ctx, AppDbContext db
     if (machine is null) return Results.Unauthorized();
 
     if (string.IsNullOrWhiteSpace(req.CardNo) || string.IsNullOrWhiteSpace(req.Pin))
-        return Results.Json(new { ok = false, reason = "请输入卡号和 PIN" });
+        return Results.Json(new { ok = false, reason = "Card number and PIN are required" });
 
     var st = loginFailures.GetOrAdd(req.CardNo, _ => new FailState(0, DateTime.MinValue, DateTime.MinValue));
     if (DateTime.UtcNow < st.LockedUntil)
-        return Results.Json(new { ok = false, reason = "尝试次数过多，请 1 分钟后再试" });
+        return Results.Json(new { ok = false, reason = "Too many attempts, try again in 1 minute" });
 
     // 失败计数衰减：10 分钟前的失败不再累计
     var count = DateTime.UtcNow - st.LastFailAt > TimeSpan.FromMinutes(10) ? 0 : st.Count;
@@ -323,24 +323,24 @@ app.MapPost("/api/client/login", (LoginReq req, HttpContext ctx, AppDbContext db
             lockedUntil > DateTime.MinValue ? 0 : count,
             lockedUntil,
             DateTime.UtcNow);
-        return Results.Json(new { ok = false, reason = "卡号或 PIN 错误" });
+        return Results.Json(new { ok = false, reason = "Invalid card number or PIN" });
     }
     loginFailures.TryRemove(req.CardNo, out _);
 
     if (!person.Enabled)
-        return Results.Json(new { ok = false, reason = "账户已停用" });
+        return Results.Json(new { ok = false, reason = "Account disabled" });
 
     // 策略检查：可用时段 + 每日额度（含余额判断）
     var tz = app.Configuration.GetValue("Policy:TzOffsetHours", 8);
     var (eff, outsideWin, _) = PolicyEngine.Evaluate(db, person, null, DateTime.UtcNow, tz);
     if (outsideWin)
-        return Results.Json(new { ok = false, reason = "当前不在可用时段" });
+        return Results.Json(new { ok = false, reason = "Outside allowed hours" });
     if (eff <= 0)
-        return Results.Json(new { ok = false, reason = person.BalanceSeconds <= 0 ? "余额不足，请联系家长" : "今日额度已用完，明天再来吧" });
+        return Results.Json(new { ok = false, reason = person.BalanceSeconds <= 0 ? "Insufficient balance, contact your parent" : "Daily quota used up, come back tomorrow" });
     if (db.Sessions.Any(s => s.PersonId == person.Id && s.Status == SessionStatus.Active))
-        return Results.Json(new { ok = false, reason = "该账号正在其他设备上机" });
+        return Results.Json(new { ok = false, reason = "Account already in use on another PC" });
     if (db.Sessions.Any(s => s.MachineId == machine.Id && s.Status == SessionStatus.Active))
-        return Results.Json(new { ok = false, reason = "本机已有上机会话" });
+        return Results.Json(new { ok = false, reason = "This PC already has an active session" });
 
     var session = new Session
     {
@@ -403,10 +403,10 @@ app.MapPost("/api/client/request", (RequestTimeReq req, HttpContext ctx, AppDbCo
     var session = db.Sessions.Include(s => s.Person)
         .FirstOrDefault(s => s.MachineId == machine.Id && s.Status == SessionStatus.Active);
     if (session is null)
-        return Results.Json(new { ok = false, reason = "当前未在上机" });
+        return Results.Json(new { ok = false, reason = "No active session" });
 
     if (db.TimeRequests.Any(r => r.PersonId == session.PersonId && r.Status == RequestStatus.Pending))
-        return Results.Json(new { ok = false, reason = "已有待审批的申请，请耐心等待" });
+        return Results.Json(new { ok = false, reason = "A time request is already pending" });
 
     var minutes = Math.Clamp(req.Minutes, 5, 120);
     var request = new TimeRequest
@@ -475,9 +475,9 @@ app.MapPost("/api/admin/persons", (CreatePersonReq req, HttpContext ctx, AppDbCo
 {
     if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
     if (string.IsNullOrWhiteSpace(req.CardNo) || string.IsNullOrWhiteSpace(req.Pin) || string.IsNullOrWhiteSpace(req.DisplayName))
-        return Results.Json(new { ok = false, reason = "卡号、姓名、PIN 均不能为空" });
+        return Results.Json(new { ok = false, reason = "Card number, name and PIN are required" });
     if (db.Persons.Any(p => p.CardNo == req.CardNo))
-        return Results.Json(new { ok = false, reason = "卡号已存在" });
+        return Results.Json(new { ok = false, reason = "Card number already exists" });
 
     var person = new Person
     {
@@ -497,7 +497,7 @@ app.MapPost("/api/admin/persons", (CreatePersonReq req, HttpContext ctx, AppDbCo
         db.TimeLedger.Add(new TimeLedger
         {
             PersonId = person.Id, DeltaSeconds = person.BalanceSeconds,
-            Kind = LedgerKind.Initial, Note = "开户", CreatedAt = DateTime.UtcNow
+            Kind = LedgerKind.Initial, Note = "initial balance", CreatedAt = DateTime.UtcNow
         });
         db.SaveChanges();
     }
@@ -525,7 +525,7 @@ app.MapDelete("/api/admin/persons/{id}", (int id, HttpContext ctx, AppDbContext 
     var person = db.Persons.Find(id);
     if (person is null) return Results.NotFound();
     if (db.Sessions.Any(s => s.PersonId == id && s.Status == SessionStatus.Active))
-        return Results.Json(new { ok = false, reason = "该账户正在上机，请先强制下机" });
+        return Results.Json(new { ok = false, reason = "Account is in use, force logoff first" });
 
     db.Persons.Remove(person);
     db.SaveChanges();
@@ -599,7 +599,7 @@ app.MapPost("/api/admin/requests/{id}/decide", (int id, DecideReq req, HttpConte
     var request = db.TimeRequests.Include(r => r.Person).FirstOrDefault(r => r.Id == id);
     if (request is null) return Results.NotFound();
     if (request.Status != RequestStatus.Pending)
-        return Results.Json(new { ok = false, reason = "该申请已处理" });
+        return Results.Json(new { ok = false, reason = "Request already processed" });
 
     if (req.Approve)
     {
@@ -623,7 +623,7 @@ app.MapPost("/api/admin/requests/{id}/decide", (int id, DecideReq req, HttpConte
     else
     {
         db.Commands.Add(NewCmd(request.MachineId, "message",
-            JsonSerializer.Serialize(new { text = $"加时申请未通过（{request.Minutes} 分钟）" }), 10));
+            JsonSerializer.Serialize(new { text = $"Time request declined ({request.Minutes} min)" }), 10));
     }
 
     request.Status = req.Approve ? RequestStatus.Approved : RequestStatus.Rejected;
@@ -708,15 +708,15 @@ app.MapPut("/api/admin/policies/{id}", (int id, PolicyReq req, HttpContext ctx, 
 
 static string? ValidatePolicy(PolicyReq req)
 {
-    if (string.IsNullOrWhiteSpace(req.Name)) return "名称不能为空";
+    if (string.IsNullOrWhiteSpace(req.Name)) return "Name is required";
     if (req.Windows is not null)
         foreach (var w in req.Windows)
             if (!PolicyEngine.TryParseHm(w.Start, out _) || !PolicyEngine.TryParseHm(w.End, out _))
-                return "时段格式应为 HH:mm";
+                return "Time windows must use HH:mm format";
     if ((req.SlidingWindowMinutes > 0) != (req.SlidingQuotaMinutes > 0))
-        return "滑动窗口长度与窗口限额需同时设置（同时为 0 表示不启用）";
+        return "Sliding window length and quota must both be set (0 = disabled)";
     if (req.SlidingWindowMinutes > 0 && req.SlidingQuotaMinutes > req.SlidingWindowMinutes)
-        return "滑动窗口限额不能超过窗口长度";
+        return "Window quota cannot exceed window length";
     return null;
 }
 
@@ -734,9 +734,9 @@ app.MapPost("/api/admin/machines", (CreateMachineReq req, HttpContext ctx, AppDb
 {
     if (!auth.Valid(Bearer(ctx))) return Results.Unauthorized();
     if (string.IsNullOrWhiteSpace(req.Name))
-        return Results.Json(new { ok = false, reason = "名称不能为空" });
+        return Results.Json(new { ok = false, reason = "Name is required" });
     if (db.Machines.Any(m => m.Name == req.Name))
-        return Results.Json(new { ok = false, reason = "名称已存在" });
+        return Results.Json(new { ok = false, reason = "Name already exists" });
 
     var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     var machine = new Machine { Name = req.Name, Secret = secret, CreatedAt = DateTime.UtcNow };
@@ -752,7 +752,7 @@ app.MapDelete("/api/admin/machines/{id}", (int id, HttpContext ctx, AppDbContext
     var machine = db.Machines.Find(id);
     if (machine is null) return Results.NotFound();
     if (db.Sessions.Any(s => s.MachineId == id && s.Status == SessionStatus.Active))
-        return Results.Json(new { ok = false, reason = "该机器有进行中的会话，请先强制下机" });
+        return Results.Json(new { ok = false, reason = "Machine has an active session, force logoff first" });
 
     db.Commands.RemoveRange(db.Commands.Where(c => c.MachineId == id));
     db.Machines.Remove(machine);   // 历史会话由 FK 级联删除
@@ -768,7 +768,7 @@ app.MapPost("/api/admin/machines/{id}/command", (int id, CommandReq req, HttpCon
     var action = req.Action.Trim().ToLowerInvariant();
     var valid = new[] { "lock", "unlock", "logoff", "shutdown", "reboot", "message" };
     if (!valid.Contains(action))
-        return Results.Json(new { ok = false, reason = "未知指令" });
+        return Results.Json(new { ok = false, reason = "Unknown command" });
 
     var payload = action == "message"
         ? JsonSerializer.Serialize(new { text = req.Text ?? "" })

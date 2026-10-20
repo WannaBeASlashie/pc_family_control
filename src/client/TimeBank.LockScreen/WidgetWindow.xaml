@@ -19,7 +19,7 @@
                        FontWeight="SemiBold" VerticalAlignment="Center"/>
             <TextBlock x:Name="TimeText" Grid.Column="1" Text="00:00:00" Foreground="#7DD3FC"
                        FontSize="20" FontWeight="Bold" Margin="10,0,12,0" VerticalAlignment="Center"/>
-            <Button x:Name="LogoutBtn" Grid.Column="2" Content="下机" Height="32" Padding="14,0"
+            <Button x:Name="LogoutBtn" Grid.Column="2" Content="End" Height="32" Padding="14,0"
                     Background="#EF4444" Foreground="White" BorderThickness="0"
                     Cursor="Hand" VerticalAlignment="Center" Click="OnLogout"/>
         </Grid>

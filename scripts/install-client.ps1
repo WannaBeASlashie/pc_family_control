@@ -21,16 +21,16 @@ $ErrorActionPreference = "Stop"
 
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent())
         .IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw "请以管理员身份运行此脚本"
+    throw "Run this script as Administrator"
 }
 if ([string]::IsNullOrWhiteSpace($Secret)) {
-    throw "必须提供 -Secret（在服务器管理端创建机器后获得）"
+    throw "Missing -Secret (create the machine in the admin console first)"
 }
 
 $repo = Split-Path -Parent $PSScriptRoot
 
 # 1) 停止旧版本（服务/UI 运行时文件被占用，必须先停再发布，否则重装失败）
-Write-Host ">> 停止旧版本 ..."
+Write-Host ">> Stopping previous version ..."
 Get-Process TimeBank.LockScreen -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
     sc.exe stop $ServiceName | Out-Null
@@ -39,13 +39,13 @@ if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
 }
 
 # 2) 发布
-Write-Host ">> 发布 Agent ..."
+Write-Host ">> Publishing Agent ..."
 dotnet publish (Join-Path $repo "src\client\TimeBank.Agent") -c Release -o "$InstallDir\agent"
-if ($LASTEXITCODE -ne 0) { throw "Agent 发布失败（需已安装 .NET 8 SDK）" }
+if ($LASTEXITCODE -ne 0) { throw "Agent publish failed (is .NET 8 SDK installed?)" }
 
-Write-Host ">> 发布 LockScreen UI ..."
+Write-Host ">> Publishing LockScreen UI ..."
 dotnet publish (Join-Path $repo "src\client\TimeBank.LockScreen") -c Release -o "$InstallDir\ui"
-if ($LASTEXITCODE -ne 0) { throw "LockScreen 发布失败" }
+if ($LASTEXITCODE -ne 0) { throw "LockScreen publish failed" }
 
 # 3) 写配置
 @{
@@ -60,11 +60,11 @@ sc.exe description $ServiceName $Description
 sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/10000/restart/60000
 sc.exe start $ServiceName
 
-# 5) 离线缓存目录：仅 SYSTEM/管理员可访问（kit 含 PIN 哈希，防标准用户读取）
+# 5) Offline cache dir: SYSTEM/Administrators only (kit contains PIN hashes)
 New-Item -ItemType Directory -Force "$InstallDir\offline" | Out-Null
 icacls "$InstallDir\offline" /inheritance:r /grant "SYSTEM:(OI)(CI)F" /grant "Administrators:(OI)(CI)F" | Out-Null
 
-# 6) 锁屏 UI 加入当前用户开机自启（共享 Windows 账户需先配置自动登录）
+# 6) Add UI to current user startup (shared account needs auto-login)
 $startup = [Environment]::GetFolderPath("Startup")
 $shell = New-Object -ComObject WScript.Shell
 $lnk = $shell.CreateShortcut((Join-Path $startup "TimeBankUI.lnk"))
@@ -73,7 +73,7 @@ $lnk.WorkingDirectory = "$InstallDir\ui"
 $lnk.Save()
 
 Write-Host ""
-Write-Host "安装完成：服务 [$DisplayName] ($ServiceName)，UI 已加入当前用户自启。"
-Write-Host "提示："
-Write-Host " 1. 共享 Windows 账户建议配置自动登录（netplwiz），账户类型必须是【标准用户】。"
-Write-Host " 2. P1 加固项（按需手动）：策略禁用任务管理器/注册表编辑器、限制改系统时间。"
+Write-Host "Done. Service [$DisplayName] ($ServiceName); UI added to current user startup."
+Write-Host "Notes:"
+Write-Host " 1. Configure auto-login for the shared Windows account (netplwiz); it MUST be a standard user."
+Write-Host " 2. Hardening (manual, optional): disable Task Manager/registry editor, restrict system time changes."

@@ -1,4 +1,4 @@
-# willBeyond TimeBank · 时光银行
+# willBeyond TimeBank
 
 家庭电脑时间管控系统 —— 时间即货币：开户、充值、消费、审批、对账。
 

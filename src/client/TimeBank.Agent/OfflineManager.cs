@@ -121,7 +121,7 @@ public class OfflineManager
                 _adoptedRemaining = st.BalanceSeconds;
                 _adoptedSince = DateTime.UtcNow;
             }
-            _log.LogWarning("进入离线模式（kit: {HasKit}, 人员 {Count}）", _kit != null, _kit?.Persons?.Count ?? 0);
+            _log.LogWarning("Entering offline mode (kit: {HasKit}, persons {Count})", _kit != null, _kit?.Persons?.Count ?? 0);
         }
     }
 
@@ -132,28 +132,28 @@ public class OfflineManager
         lock (_gate)
         {
             if (_state.Snapshot().SessionId != null)
-                return (false, "本机已有上机会话");
+                return (false, "This PC already has an active session");
             if (_kit is null || _kit.Persons is null || _kit.Persons.Count == 0)
-                return (false, "离线档案不可用，请联系家长");
+                return (false, "Offline profile unavailable");
             if (DateTime.UtcNow - _kit.GeneratedAt > TimeSpan.FromHours(Math.Max(_kit.MaxAgeHours, 1)))
-                return (false, "离线档案已过期，请联系家长");
+                return (false, "Offline profile expired");
 
             var p = _kit.Persons.FirstOrDefault(x => x.CardNo == cardNo);
             if (p is null || !PinVerifier.Verify(pin, p.PinHash))
-                return (false, "卡号或 PIN 错误");
+                return (false, "Invalid card number or PIN");
             if (p.Quota <= 0)
-                return (false, "当前账户不允许离线上机");
+                return (false, "Offline sign-in is not allowed for this account");
 
             RollDate();
             var used = _personUsage.GetValueOrDefault($"{_today}|{cardNo}");
             if (used >= p.Quota)
-                return (false, "今日离线额度已用完");
+                return (false, "Offline quota used up for today");
             if (_machineUsage >= _kit.MachineDailySeconds)
-                return (false, "本机今日离线额度已用完");
+                return (false, "Machine offline quota used up for today");
 
             var balanceLeft = p.Balance - UnsyncedUsage(cardNo);
             if (balanceLeft <= 0)
-                return (false, "余额不足，请联系家长");
+                return (false, "Insufficient balance, contact your parent");
 
             _active = new OfflineActive
             {
@@ -168,7 +168,7 @@ public class OfflineManager
             PersistLedger();
             _state.SetCardNo(cardNo);
             PushActiveState();
-            _log.LogInformation("离线上机：{Card}（余额上限 {Bal}s，个人额度剩 {Pq}s，机器额度剩 {Mq}s）",
+            _log.LogInformation("Offline sign-in: {Card} (balance cap {Bal}s, person quota left {Pq}s, machine quota left {Mq}s)",
                 cardNo, balanceLeft, _active.PersonQuotaLeft, _active.MachineQuotaLeft);
             return (true, null);
         }
@@ -220,7 +220,7 @@ public class OfflineManager
                     FinalizeActive("exhausted");
                     Win32.LogoffActiveSession();
                     _state.ApplyServerState(null, 0);
-                    _log.LogInformation("离线会话耗尽，已本地注销（{Card}）", card);
+                    _log.LogInformation("Offline session exhausted, local logoff ({Card})", card);
                 }
                 return;
             }
@@ -281,7 +281,7 @@ public class OfflineManager
             _active = null;
             _adoptedRemaining = 0;
             PersistLedger();
-            _log.LogInformation("离线补账完成");
+            _log.LogInformation("Offline sync complete");
         }
     }
 
@@ -349,7 +349,7 @@ public class OfflineManager
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "离线 kit 持久化失败");
+            _log.LogWarning(ex, "Offline kit persist failed");
         }
     }
 
@@ -374,7 +374,7 @@ public class OfflineManager
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "离线台账写入失败");
+            _log.LogWarning(ex, "Offline ledger write failed");
         }
     }
 
@@ -403,12 +403,12 @@ public class OfflineManager
                     ChargedSeconds = (long)(end - f.Active.StartedAtUtc).TotalSeconds,
                     Reason = "agent_restart"
                 });
-                _log.LogInformation("恢复离线台账：活动会话按最后活跃+60s 估算结束（{Card}）", f.Active.CardNo);
+                _log.LogInformation("Ledger recovered: active session closed at last-alive+60s ({Card})", f.Active.CardNo);
             }
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "离线台账加载失败");
+            _log.LogWarning(ex, "Offline ledger load failed");
         }
     }
 }

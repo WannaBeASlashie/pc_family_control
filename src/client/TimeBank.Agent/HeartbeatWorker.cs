@@ -63,7 +63,7 @@ public class HeartbeatWorker : BackgroundService
                             }
                             catch (Exception ex)
                             {
-                                _log.LogWarning(ex, "离线补账失败，稍后重试");
+                                _log.LogWarning(ex, "Offline sync failed, will retry");
                             }
                         }
 
@@ -85,7 +85,7 @@ public class HeartbeatWorker : BackgroundService
                             }
                             catch (Exception ex)
                             {
-                                _log.LogError(ex, "执行指令 {Action} 失败", cmd.Action);
+                                _log.LogError(ex, "Command {Action} failed", cmd.Action);
                             }
                             try
                             {
@@ -93,7 +93,7 @@ public class HeartbeatWorker : BackgroundService
                             }
                             catch (Exception ex)
                             {
-                                _log.LogWarning(ex, "指令 {Id} 确认失败", cmd.Id);
+                                _log.LogWarning(ex, "Command {Id} ack failed", cmd.Id);
                             }
                         }
                     }
@@ -116,7 +116,7 @@ public class HeartbeatWorker : BackgroundService
                     _offline.EnterOffline();
                     _state.SetOffline(true);
                 }
-                _log.LogWarning(ex, "心跳失败（服务器不可达？离线模式：{Offline}）", _offline.IsOfflineMode);
+                _log.LogWarning(ex, "Heartbeat failed (server unreachable? offline={Offline})", _offline.IsOfflineMode);
             }
 
             // 离线模式的本地倒计时/耗尽处置（与管道操作串行化）

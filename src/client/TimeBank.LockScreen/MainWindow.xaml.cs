@@ -26,7 +26,7 @@ public partial class MainWindow : Window
 
         if (!await _pipe.WaitConnectedAsync(TimeSpan.FromSeconds(30)))
         {
-            FooterText.Text = "⚠ 本机管控服务未运行，请联系家长";
+            FooterText.Text = "Local agent is not running";
             return;
         }
 
@@ -40,7 +40,7 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             FooterText.Text = !st.ServerOnline
-                ? (st.Offline ? "离线模式（受限上机）" : "⚠ 无法连接服务器，请稍候或联系家长")
+                ? (st.Offline ? "Offline mode (limited)" : "Cannot reach the server, retrying...")
                 : "";
 
             // 离线模式不可申请加时
@@ -90,7 +90,7 @@ public partial class MainWindow : Window
         var pin = PinBox.Password;
         if (cardNo.Length == 0 || pin.Length == 0)
         {
-            StatusText.Text = "请输入卡号和 PIN";
+            StatusText.Text = "Card number and PIN are required";
             return;
         }
 
@@ -105,7 +105,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                StatusText.Text = reason ?? "上机失败";
+                StatusText.Text = reason ?? "Sign-in failed";
             }
         }
         finally
@@ -128,8 +128,8 @@ public partial class MainWindow : Window
         {
             var (ok, reason) = await _pipe.RequestTimeAsync(minutes);
             StatusText.Text = ok
-                ? $"已发送 +{minutes} 分钟申请，等待家长批准…"
-                : reason ?? "申请失败，请稍后再试";
+                ? $"Request sent: +{minutes} min, waiting for approval..."
+                : reason ?? "Request failed, try again later";
         }
         finally
         {

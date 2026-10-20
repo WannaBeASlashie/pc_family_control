@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>时光银行 · 家长控制台</title>
+<title>TimeBank — Admin Console</title>
 <style>
   :root {
     --bg:#0e1420; --panel:#161d2e; --panel2:#1a2233; --border:#2a3550;
@@ -13,7 +13,8 @@
   * { box-sizing:border-box; margin:0; padding:0; }
   body { background:var(--bg); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; font-size:15px; }
   header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:20; }
-  header h1 { font-size:18px; flex:1; }
+  header h1 { font-size:18px; flex:1; letter-spacing:.2px; }
+  header h1 span { color:var(--muted); font-weight:400; margin-left:8px; font-size:14px; }
   nav { display:flex; gap:6px; padding:10px 14px; overflow-x:auto; border-bottom:1px solid var(--border); background:var(--bg); position:sticky; top:57px; z-index:19; }
   nav button { border:none; background:transparent; color:var(--muted); padding:8px 14px; border-radius:8px; cursor:pointer; font-size:15px; white-space:nowrap; }
   nav button.active { background:var(--panel2); color:var(--text); }
@@ -48,7 +49,8 @@
   #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--panel2); border:1px solid var(--border); padding:10px 20px; border-radius:8px; display:none; z-index:99; }
   #login { position:fixed; inset:0; background:var(--bg); display:none; align-items:center; justify-content:center; z-index:50; }
   #login .box { width:300px; }
-  #login h2 { text-align:center; margin-bottom:16px; }
+  #login h2 { text-align:center; margin-bottom:4px; }
+  #login .sub { text-align:center; color:var(--muted); font-size:13px; margin-bottom:16px; }
   .winrow { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   .winrow input { flex:1; }
   .toolbar { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center; }
@@ -59,127 +61,127 @@
 
 <div id="login">
   <div class="box panel">
-    <h2>🏠 时光银行</h2>
-    <label>家长密码</label>
+    <h2>TimeBank</h2>
+    <div class="sub">willBeyond</div>
+    <label>Admin password</label>
     <input type="password" id="pwd" autofocus>
     <br><br>
-    <button class="btn blue" style="width:100%" onclick="doLogin()">登 录</button>
+    <button class="btn blue" style="width:100%" onclick="doLogin()">Sign in</button>
     <p id="loginErr" class="red" style="margin-top:8px;text-align:center"></p>
   </div>
 </div>
 
 <header>
-  <h1>🕰 时光银行 · 家长控制台</h1>
+  <h1>TimeBank <span>willBeyond · Admin Console</span></h1>
   <span id="hdBadge"></span>
-  <button class="btn" onclick="logout()">退出</button>
+  <button class="btn" onclick="logout()">Sign out</button>
 </header>
 
 <nav id="nav">
-  <button data-tab="overview" class="active">总览</button>
-  <button data-tab="accounts">账户</button>
-  <button data-tab="requests">审批<span id="reqBadge" class="badge" style="display:none"></span></button>
-  <button data-tab="policies">策略</button>
-  <button data-tab="machines">机器</button>
-  <button data-tab="records">记录</button>
+  <button data-tab="overview" class="active">Overview</button>
+  <button data-tab="accounts">Accounts</button>
+  <button data-tab="requests">Requests<span id="reqBadge" class="badge" style="display:none"></span></button>
+  <button data-tab="policies">Policies</button>
+  <button data-tab="machines">Machines</button>
+  <button data-tab="records">Records</button>
 </nav>
 
 <main>
-  <!-- 总览 -->
+  <!-- Overview -->
   <section id="tab-overview" class="active">
     <div class="cards">
-      <div class="card"><div class="num" id="ovOnline">-</div><div class="lbl">机器在线</div></div>
-      <div class="card"><div class="num" id="ovSessions">-</div><div class="lbl">正在上机</div></div>
-      <div class="card"><div class="num amber" id="ovPending" style="cursor:pointer" onclick="switchTab('requests')">-</div><div class="lbl">待审批</div></div>
+      <div class="card"><div class="num" id="ovOnline">-</div><div class="lbl">Machines online</div></div>
+      <div class="card"><div class="num" id="ovSessions">-</div><div class="lbl">Active sessions</div></div>
+      <div class="card"><div class="num amber" id="ovPending" style="cursor:pointer" onclick="switchTab('requests')">-</div><div class="lbl">Pending requests</div></div>
     </div>
-    <div class="panel"><h3>正在上机</h3><div id="ovSessionList" class="muted">无人使用</div></div>
-    <div class="panel"><h3>机器</h3><div id="ovMachines" class="muted"></div></div>
+    <div class="panel"><h3>Active sessions</h3><div id="ovSessionList" class="muted">No one is signed in</div></div>
+    <div class="panel"><h3>Machines</h3><div id="ovMachines" class="muted"></div></div>
   </section>
 
-  <!-- 账户 -->
+  <!-- Accounts -->
   <section id="tab-accounts">
     <div class="panel" id="newPersonPanel" style="display:none">
-      <h3>新建账户</h3>
+      <h3>New account</h3>
       <div class="grid2">
-        <div><label>卡号</label><input id="npCard"></div>
-        <div><label>姓名</label><input id="npName"></div>
+        <div><label>Card no.</label><input id="npCard"></div>
+        <div><label>Name</label><input id="npName"></div>
         <div><label>PIN</label><input id="npPin" maxlength="8"></div>
-        <div><label>初始时长（分钟）</label><input id="npInit" type="number" value="60"></div>
-        <div><label>策略</label><select id="npPolicy"></select></div>
+        <div><label>Initial time (min)</label><input id="npInit" type="number" value="60"></div>
+        <div><label>Policy</label><select id="npPolicy"></select></div>
       </div>
-      <br><button class="btn blue" onclick="createPerson()">创建</button>
-      <button class="btn" onclick="hide('newPersonPanel')">取消</button>
+      <br><button class="btn blue" onclick="createPerson()">Create</button>
+      <button class="btn" onclick="hide('newPersonPanel')">Cancel</button>
     </div>
     <div class="panel" id="editPersonPanel" style="display:none">
-      <h3>编辑账户 <span id="epTitle" class="muted"></span></h3>
+      <h3>Edit account <span id="epTitle" class="muted"></span></h3>
       <div class="grid2">
-        <div><label>姓名</label><input id="epName"></div>
-        <div><label>PIN（留空不改）</label><input id="epPin"></div>
-        <div><label>状态</label><select id="epEnabled"><option value="true">启用</option><option value="false">停用</option></select></div>
-        <div><label>策略</label><select id="epPolicy"></select></div>
-        <div><label>调整余额（分钟，负数为扣减）</label><input id="epDelta" type="number" placeholder="如 30 或 -15"></div>
+        <div><label>Name</label><input id="epName"></div>
+        <div><label>PIN (blank = unchanged)</label><input id="epPin"></div>
+        <div><label>Status</label><select id="epEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+        <div><label>Policy</label><select id="epPolicy"></select></div>
+        <div><label>Adjust balance (min, negative = deduct)</label><input id="epDelta" type="number" placeholder="e.g. 30 or -15"></div>
       </div>
-      <br><button class="btn blue" onclick="savePerson()">保存</button>
-      <button class="btn" onclick="hide('editPersonPanel')">取消</button>
+      <br><button class="btn blue" onclick="savePerson()">Save</button>
+      <button class="btn" onclick="hide('editPersonPanel')">Cancel</button>
     </div>
-    <div class="toolbar"><button class="btn blue" onclick="show('newPersonPanel')">＋ 新建账户</button></div>
+    <div class="toolbar"><button class="btn blue" onclick="show('newPersonPanel')">+ New account</button></div>
     <div style="overflow-x:auto"><table id="personsTable"></table></div>
   </section>
 
-  <!-- 审批 -->
+  <!-- Requests -->
   <section id="tab-requests">
     <div style="overflow-x:auto"><table id="reqTable"></table></div>
   </section>
 
-  <!-- 策略 -->
+  <!-- Policies -->
   <section id="tab-policies">
     <div class="panel">
-      <h3>策略编辑</h3>
+      <h3>Policy editor</h3>
       <div class="toolbar">
         <select id="polSelect" style="width:auto" onchange="loadPolicyForm()"></select>
-        <button class="btn blue" onclick="newPolicy()">＋ 新建</button>
+        <button class="btn blue" onclick="newPolicy()">+ New</button>
       </div>
       <div class="grid2">
-        <div><label>名称</label><input id="polName"></div>
-        <div><label>工作日每日额度（分钟，0 不限）</label><input id="polWd" type="number"></div>
-        <div><label>周末每日额度（分钟，0 不限）</label><input id="polWe" type="number"></div>
-        <div><label>单次连续上限（分钟，0 不限）</label><input id="polMax" type="number"></div>
-        <div><label>滑动窗口长度（分钟，0 不启用）</label><input id="polSw" type="number" placeholder="如 120"></div>
-        <div><label>窗口内最大用时（分钟，0 不启用）</label><input id="polSq" type="number" placeholder="如 45"></div>
-        <div><label>离线额度（分钟，空=全局默认，0=禁止离线）</label><input id="polOff" type="number" placeholder="默认"></div>
-        <div><label>启用</label><select id="polEnabled"><option value="true">启用</option><option value="false">停用</option></select></div>
+        <div><label>Name</label><input id="polName"></div>
+        <div><label>Weekday daily quota (min, 0 = unlimited)</label><input id="polWd" type="number"></div>
+        <div><label>Weekend daily quota (min, 0 = unlimited)</label><input id="polWe" type="number"></div>
+        <div><label>Max session length (min, 0 = unlimited)</label><input id="polMax" type="number"></div>
+        <div><label>Sliding window length (min, 0 = off)</label><input id="polSw" type="number" placeholder="e.g. 120"></div>
+        <div><label>Max usage within window (min, 0 = off)</label><input id="polSq" type="number" placeholder="e.g. 45"></div>
+        <div><label>Offline quota (min, blank = default, 0 = no offline)</label><input id="polOff" type="number" placeholder="default"></div>
+        <div><label>Enabled</label><select id="polEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
       </div>
-      <p class="muted" style="font-size:13px;margin-top:6px">滑动窗口示例：长度 120、限额 45 = 最近 2 小时内最多累计上机 45 分钟（跨会话累计，到量锁定，窗口滑过旧用量后自动恢复）。</p>
-      <label>可用时段（时段外=宵禁，空=全天）</label>
+      <p class="muted" style="font-size:13px;margin-top:6px">Sliding window example: length 120 + quota 45 = at most 45 minutes of use within any rolling 2 hours (cross-session; old usage ages out automatically).</p>
+      <label>Allowed hours (outside = blocked; empty = all day)</label>
       <div id="winRows"></div>
-      <button class="btn sm" onclick="addWinRow('','')">＋ 添加时段</button>
-      <br><br><button class="btn blue" onclick="savePolicy()">保存策略</button>
+      <button class="btn sm" onclick="addWinRow('','')">+ Add window</button>
+      <br><br><button class="btn blue" onclick="savePolicy()">Save policy</button>
       <span id="polMsg" class="muted" style="margin-left:10px"></span>
     </div>
     <div style="overflow-x:auto"><table id="polTable"></table></div>
   </section>
 
-  <!-- 机器 -->
+  <!-- Machines -->
   <section id="tab-machines">
-    <div class="toolbar"><button class="btn blue" onclick="addMachine()">＋ 注册新机器</button></div>
+    <div class="toolbar"><button class="btn blue" onclick="addMachine()">+ Register machine</button></div>
     <div style="overflow-x:auto"><table id="machTable"></table></div>
   </section>
 
-  <!-- 记录 -->
+  <!-- Records -->
   <section id="tab-records">
-    <div class="panel"><h3>最近会话</h3><div style="overflow-x:auto"><table id="sessTable"></table></div></div>
+    <div class="panel"><h3>Recent sessions</h3><div style="overflow-x:auto"><table id="sessTable"></table></div></div>
   </section>
 </main>
 
 <div id="toast"></div>
 
 <script>
-let token = localStorage.getItem('hc_token') || '';
+let token = localStorage.getItem('tb_token') || '';
 let policies = [];
 let editingPersonId = null;
 let editingPolicyId = null;
 let pollTimer = null;
 
-// ---------- 基础 ----------
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const show = id => $(id).style.display = 'block';
@@ -193,7 +195,7 @@ async function api(method, path, body) {
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
-  if (res.status === 401) { showLogin(); throw new Error('未登录'); }
+  if (res.status === 401) { showLogin(); throw new Error('unauthorized'); }
   return res.json();
 }
 
@@ -201,23 +203,23 @@ function fmtSec(s) {
   if (s === null || s === undefined) return '-';
   s = Math.max(0, s);
   const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
-  return h > 0 ? `${h}小时${m}分` : `${m}分${s % 60}秒`;
+  return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
 }
-function fmtTime(iso) { return iso ? new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'; }
+function fmtTime(iso) { return iso ? new Date(iso).toLocaleString('en-GB', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'; }
 
-// ---------- 登录 ----------
-function showLogin() { localStorage.removeItem('hc_token'); token = ''; $('login').style.display = 'flex'; }
+// ---------- auth ----------
+function showLogin() { localStorage.removeItem('tb_token'); token = ''; $('login').style.display = 'flex'; }
 async function doLogin() {
   const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: $('pwd').value }) });
-  if (!r.ok) { $('loginErr').textContent = '密码错误'; return; }
+  if (!r.ok) { $('loginErr').textContent = 'Wrong password'; return; }
   token = (await r.json()).token;
-  localStorage.setItem('hc_token', token);
+  localStorage.setItem('tb_token', token);
   $('login').style.display = 'none'; $('loginErr').textContent = '';
   refreshAll();
 }
 function logout() { showLogin(); }
 
-// ---------- Tab ----------
+// ---------- tabs ----------
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 function switchTab(name) {
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
@@ -232,7 +234,7 @@ function switchTab(name) {
 
 function refreshAll() { loadOverview(); }
 
-// ---------- 总览 ----------
+// ---------- overview ----------
 async function loadOverview() {
   let d;
   try { d = await api('GET', 'overview'); } catch { return; }
@@ -244,36 +246,36 @@ async function loadOverview() {
   badge.style.display = d.pendingRequests > 0 ? 'inline' : 'none';
   badge.textContent = d.pendingRequests;
 
-  $('ovSessionList').innerHTML = d.activeSessions.length === 0 ? '<span class="muted">无人使用</span>' :
-    '<table><tr><th>人员</th><th>机器</th><th>开始</th><th>已用</th></tr>' +
+  $('ovSessionList').innerHTML = d.activeSessions.length === 0 ? '<span class="muted">No one is signed in</span>' :
+    '<table><tr><th>Person</th><th>Machine</th><th>Started</th><th>Used</th></tr>' +
     d.activeSessions.map(s => `<tr><td>${esc(s.person)}</td><td>${esc(s.machine)}</td><td>${fmtTime(s.startedAt)}</td><td>${fmtSec(s.chargedSeconds)}</td></tr>`).join('') + '</table>';
 
   $('ovMachines').innerHTML = d.machines.map(m =>
-    `<div style="padding:6px 0"><span class="dot ${m.online ? 'on' : 'off'}"></span>${esc(m.name)} <span class="muted">· 最后心跳 ${fmtTime(m.lastSeenAt)}</span></div>`).join('') || '<span class="muted">无</span>';
+    `<div style="padding:6px 0"><span class="dot ${m.online ? 'on' : 'off'}"></span>${esc(m.name)} <span class="muted">· last heartbeat ${fmtTime(m.lastSeenAt)}</span></div>`).join('') || '<span class="muted">None</span>';
 }
 
-// ---------- 账户 ----------
+// ---------- accounts ----------
 async function loadPersons() {
-  const [ps, pols] = await Promise.all([api('GET', 'persons'), loadPolicyOptions()]);
+  const [ps] = await Promise.all([api('GET', 'persons'), loadPolicyOptions()]);
   const polMap = {}; policies.forEach(p => polMap[p.id] = p.name);
-  $('personsTable').innerHTML = '<tr><th>卡号</th><th>姓名</th><th>余额</th><th>策略</th><th>状态</th><th>操作</th></tr>' +
+  $('personsTable').innerHTML = '<tr><th>Card</th><th>Name</th><th>Balance</th><th>Policy</th><th>Status</th><th>Actions</th></tr>' +
     ps.map(p => `<tr>
       <td>${esc(p.cardNo)}</td><td>${esc(p.displayName)}</td>
       <td class="balance">${fmtSec(p.balanceSeconds)}</td>
       <td class="muted">${esc(polMap[p.policyId] || p.policyId)}</td>
-      <td>${p.enabled ? '<span class="green">启用</span>' : '<span class="red">停用</span>'}</td>
+      <td>${p.enabled ? '<span class="green">Enabled</span>' : '<span class="red">Disabled</span>'}</td>
       <td><div class="row-actions">
         <button class="btn sm green" onclick="grant(${p.id},900)">+15m</button>
         <button class="btn sm green" onclick="grant(${p.id},1800)">+30m</button>
         <button class="btn sm green" onclick="grant(${p.id},3600)">+1h</button>
         <button class="btn sm red" onclick="grant(${p.id},-900)">-15m</button>
-        <button class="btn sm" onclick="editPerson(${p.id})">编辑</button>
+        <button class="btn sm" onclick="editPerson(${p.id})">Edit</button>
       </div></td></tr>`).join('');
 }
 
 async function grant(id, deltaSeconds) {
   const r = await api('POST', `persons/${id}/balance`, { deltaSeconds, note: 'console' });
-  toast(r.ok ? '已调整' + (r.balanceSeconds != null ? `，余额 ${fmtSec(r.balanceSeconds)}` : '') : (r.reason || '失败'));
+  toast(r.ok ? 'Updated' + (r.balanceSeconds != null ? `, balance ${fmtSec(r.balanceSeconds)}` : '') : (r.reason || 'Failed'));
   loadPersons();
 }
 
@@ -281,7 +283,7 @@ function editPerson(id) {
   api('GET', 'persons').then(ps => {
     const p = ps.find(x => x.id === id); if (!p) return;
     editingPersonId = id;
-    $('epTitle').textContent = `（${p.cardNo}）`;
+    $('epTitle').textContent = `(${p.cardNo})`;
     $('epName').value = p.displayName; $('epPin').value = '';
     $('epEnabled').value = String(p.enabled); $('epDelta').value = '';
     loadPolicyOptions().then(() => { $('epPolicy').value = p.policyId; });
@@ -295,7 +297,7 @@ async function savePerson() {
   const r = await api('PUT', `persons/${editingPersonId}`, body);
   const delta = parseInt($('epDelta').value || '0') * 60;
   if (delta !== 0) await api('POST', `persons/${editingPersonId}/balance`, { deltaSeconds: delta, note: 'console' });
-  toast(r.ok ? '已保存' : (r.reason || '失败'));
+  toast(r.ok ? 'Saved' : (r.reason || 'Failed'));
   hide('editPersonPanel'); loadPersons();
 }
 
@@ -303,30 +305,30 @@ async function createPerson() {
   const body = { cardNo: $('npCard').value.trim(), displayName: $('npName').value.trim(), pin: $('npPin').value,
     initialSeconds: (parseInt($('npInit').value || '0')) * 60, policyId: +$('npPolicy').value };
   const r = await api('POST', 'persons', body);
-  toast(r.ok ? '已创建' : (r.reason || '失败'));
+  toast(r.ok ? 'Created' : (r.reason || 'Failed'));
   if (r.ok) { hide('newPersonPanel'); $('npCard').value = $('npName').value = $('npPin').value = ''; }
   loadPersons();
 }
 
-// ---------- 审批 ----------
+// ---------- requests ----------
 async function loadRequests() {
   const rs = await api('GET', 'requests?status=pending&limit=50');
-  $('reqTable').innerHTML = rs.length === 0 ? '<tr><td class="muted">暂无待审批申请</td></tr>' :
-    '<tr><th>人员</th><th>申请</th><th>时间</th><th>操作</th></tr>' +
-    rs.map(r => `<tr><td>${esc(r.person)}</td><td class="amber">+${r.minutes} 分钟</td><td>${fmtTime(r.createdAt)}</td>
+  $('reqTable').innerHTML = rs.length === 0 ? '<tr><td class="muted">No pending requests</td></tr>' :
+    '<tr><th>Person</th><th>Request</th><th>Time</th><th>Actions</th></tr>' +
+    rs.map(r => `<tr><td>${esc(r.person)}</td><td class="amber">+${r.minutes} min</td><td>${fmtTime(r.createdAt)}</td>
       <td><div class="row-actions">
-        <button class="btn sm green" onclick="decide(${r.id},true)">批准</button>
-        <button class="btn sm red" onclick="decide(${r.id},false)">拒绝</button>
+        <button class="btn sm green" onclick="decide(${r.id},true)">Approve</button>
+        <button class="btn sm red" onclick="decide(${r.id},false)">Reject</button>
       </div></td></tr>`).join('');
 }
 
 async function decide(id, approve) {
   const r = await api('POST', `requests/${id}/decide`, { approve });
-  toast(r.ok ? (approve ? '已批准' : '已拒绝') : (r.reason || '操作失败'));
+  toast(r.ok ? (approve ? 'Approved' : 'Rejected') : (r.reason || 'Failed'));
   loadRequests(); loadOverview();
 }
 
-// ---------- 策略 ----------
+// ---------- policies ----------
 async function loadPolicyOptions() {
   policies = await api('GET', 'policies');
   const opts = policies.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
@@ -337,22 +339,22 @@ async function loadPolicyOptions() {
 }
 
 function renderPolTable() {
-  $('polTable').innerHTML = '<tr><th>#</th><th>名称</th><th>工作日</th><th>周末</th><th>单次上限</th><th>滑动限额</th><th>时段</th><th>状态</th></tr>' +
+  $('polTable').innerHTML = '<tr><th>#</th><th>Name</th><th>Weekday</th><th>Weekend</th><th>Max session</th><th>Sliding</th><th>Offline</th><th>Hours</th><th>Status</th></tr>' +
     policies.map(p => {
       let wins = '-';
       try { const w = JSON.parse(p.allowedWindowsJson); if (w.length) wins = w.map(x => `${x.start}-${x.end}`).join(' / '); } catch {}
-      const sliding = p.slidingWindowSeconds ? `${fmtSec(p.slidingQuotaSeconds)} / ${fmtSec(p.slidingWindowSeconds)}` : '不限';
-      const off = p.offlineQuotaSeconds === null || p.offlineQuotaSeconds === undefined ? '默认'
-                : p.offlineQuotaSeconds === 0 ? '禁止' : fmtSec(p.offlineQuotaSeconds);
+      const sliding = p.slidingWindowSeconds ? `${fmtSec(p.slidingQuotaSeconds)} / ${fmtSec(p.slidingWindowSeconds)}` : 'off';
+      const off = p.offlineQuotaSeconds === null || p.offlineQuotaSeconds === undefined ? 'default'
+                : p.offlineQuotaSeconds === 0 ? 'off' : fmtSec(p.offlineQuotaSeconds);
       return `<tr class="${editingPolicyId === p.id ? 'amber' : ''}" style="cursor:pointer" onclick="selectPolicy(${p.id})">
         <td>${p.id}</td><td>${esc(p.name)}</td>
-        <td>${p.weekdayQuotaSeconds ? fmtSec(p.weekdayQuotaSeconds) : '不限'}</td>
-        <td>${p.weekendQuotaSeconds ? fmtSec(p.weekendQuotaSeconds) : '不限'}</td>
-        <td>${p.maxSessionSeconds ? fmtSec(p.maxSessionSeconds) : '不限'}</td>
+        <td>${p.weekdayQuotaSeconds ? fmtSec(p.weekdayQuotaSeconds) : 'unlimited'}</td>
+        <td>${p.weekendQuotaSeconds ? fmtSec(p.weekendQuotaSeconds) : 'unlimited'}</td>
+        <td>${p.maxSessionSeconds ? fmtSec(p.maxSessionSeconds) : 'unlimited'}</td>
         <td>${esc(sliding)}</td>
         <td>${esc(off)}</td>
         <td class="muted">${esc(wins)}</td>
-        <td>${p.enabled ? '<span class="green">启用</span>' : '<span class="red">停用</span>'}</td></tr>`;
+        <td>${p.enabled ? '<span class="green">Enabled</span>' : '<span class="red">Disabled</span>'}</td></tr>`;
     }).join('');
 }
 
@@ -379,8 +381,8 @@ function loadPolicyForm() { selectPolicy(+$('polSelect').value); }
 
 function newPolicy() {
   editingPolicyId = null;
-  $('polName').value = '新策略'; $('polWd').value = 60; $('polWe').value = 120; $('polMax').value = 0;
-  $('polSw').value = 0; $('polSq').value = 0;
+  $('polName').value = 'New policy'; $('polWd').value = 60; $('polWe').value = 120; $('polMax').value = 0;
+  $('polSw').value = 0; $('polSq').value = 0; $('polOff').value = '';
   $('polEnabled').value = 'true'; $('winRows').innerHTML = ''; addWinRow('08:00', '21:30');
   renderPolTable();
 }
@@ -388,7 +390,7 @@ function newPolicy() {
 function addWinRow(start, end) {
   const div = document.createElement('div');
   div.className = 'winrow';
-  div.innerHTML = `<input type="time" value="${start}"> <span class="muted">至</span> <input type="time" value="${end === '24:00' ? '23:59' : end}"> <button class="btn sm red" onclick="this.parentNode.remove()">×</button>`;
+  div.innerHTML = `<input type="time" value="${start}"> <span class="muted">to</span> <input type="time" value="${end === '24:00' ? '23:59' : end}"> <button class="btn sm red" onclick="this.parentNode.remove()">&times;</button>`;
   $('winRows').appendChild(div);
 }
 
@@ -406,62 +408,62 @@ async function savePolicy() {
   const r = editingPolicyId
     ? await api('PUT', `policies/${editingPolicyId}`, body)
     : await api('POST', 'policies', body);
-  toast(r.ok ? '已保存' : (r.reason || '失败'));
+  toast(r.ok ? 'Saved' : (r.reason || 'Failed'));
   if (r.ok && !editingPolicyId) editingPolicyId = r.id;
   await loadPolicyOptions();
   if (editingPolicyId) selectPolicy(editingPolicyId);
 }
 
-// ---------- 机器 ----------
+// ---------- machines ----------
 async function loadMachines() {
   const ms = await api('GET', 'machines');
-  $('machTable').innerHTML = '<tr><th>ID</th><th>名称</th><th>在线</th><th>最后心跳</th><th>操作</th></tr>' +
+  $('machTable').innerHTML = '<tr><th>ID</th><th>Name</th><th>Online</th><th>Last heartbeat</th><th>Actions</th></tr>' +
     ms.map(m => `<tr><td>${m.id}</td><td>${esc(m.name)}</td>
-      <td>${m.online ? '<span class="green">在线</span>' : '<span class="muted">离线</span>'}</td>
+      <td>${m.online ? '<span class="green">Online</span>' : '<span class="muted">Offline</span>'}</td>
       <td class="muted">${fmtTime(m.lastSeenAt)}</td>
       <td><div class="row-actions">
-        <button class="btn sm amber" onclick="cmd(${m.id},'lock')">锁定</button>
-        <button class="btn sm green" onclick="cmd(${m.id},'unlock')">解锁</button>
-        <button class="btn sm" onclick="cmd(${m.id},'logoff')">下机</button>
-        <button class="btn sm" onclick="cmd(${m.id},'message')">消息</button>
-        <button class="btn sm red" onclick="cmd(${m.id},'shutdown')">关机</button>
-        <button class="btn sm red" onclick="cmd(${m.id},'reboot')">重启</button>
-        <button class="btn sm" onclick="delMachine(${m.id},'${esc(m.name)}')">删除</button>
+        <button class="btn sm amber" onclick="cmd(${m.id},'lock')">Lock</button>
+        <button class="btn sm green" onclick="cmd(${m.id},'unlock')">Unlock</button>
+        <button class="btn sm" onclick="cmd(${m.id},'logoff')">Logoff</button>
+        <button class="btn sm" onclick="cmd(${m.id},'message')">Message</button>
+        <button class="btn sm red" onclick="cmd(${m.id},'shutdown')">Shutdown</button>
+        <button class="btn sm red" onclick="cmd(${m.id},'reboot')">Reboot</button>
+        <button class="btn sm" onclick="delMachine(${m.id},'${esc(m.name)}')">Delete</button>
       </div></td></tr>`).join('');
-}
-
-async function delMachine(id, name) {
-  if (!confirm(`确定删除机器【${name}】？\n其历史会话与指令将一并清除（不可恢复）。`)) return;
-  const r = await api('DELETE', `machines/${id}`);
-  toast(r.ok ? '已删除' : (r.reason || '删除失败'));
-  loadMachines();
 }
 
 async function cmd(id, action) {
   let text;
-  if (action === 'message') { text = prompt('消息内容：'); if (!text) return; }
-  if (action === 'shutdown' || action === 'reboot') { if (!confirm(`确定对机器执行【${action === 'shutdown' ? '关机' : '重启'}】？`)) return; }
+  if (action === 'message') { text = prompt('Message:'); if (!text) return; }
+  if (action === 'shutdown' || action === 'reboot') { if (!confirm(`Really ${action} this machine?`)) return; }
   const r = await api('POST', `machines/${id}/command`, { action, text });
-  toast(r.ok ? '指令已下发（机器下次心跳生效）' : (r.reason || '失败'));
+  toast(r.ok ? 'Command queued (applies on next heartbeat)' : (r.reason || 'Failed'));
 }
 
 async function addMachine() {
-  const name = prompt('机器名称（如 PC-1）：'); if (!name) return;
+  const name = prompt('Machine name (e.g. PC-1):'); if (!name) return;
   const r = await api('POST', 'machines', { name });
-  if (r.ok) alert(`机器已创建 id=${r.id}\n密钥：${r.secret}\n\n请用于 install-client.ps1 的 -MachineId/-Secret 参数`);
+  if (r.ok) alert(`Machine created: id=${r.id}\nSecret: ${r.secret}\n\nUse with install-client.ps1 -MachineId/-Secret`);
   loadMachines();
 }
 
-// ---------- 记录 ----------
+async function delMachine(id, name) {
+  if (!confirm(`Delete machine "${name}"?\nIts session history and commands will be removed (irreversible).`)) return;
+  const r = await api('DELETE', `machines/${id}`);
+  toast(r.ok ? 'Deleted' : (r.reason || 'Failed'));
+  loadMachines();
+}
+
+// ---------- records ----------
 async function loadRecords() {
   const ss = await api('GET', 'sessions?limit=50');
-  $('sessTable').innerHTML = '<tr><th>人员</th><th>机器</th><th>开始</th><th>结束</th><th>计费</th><th>原因</th></tr>' +
+  $('sessTable').innerHTML = '<tr><th>Person</th><th>Machine</th><th>Started</th><th>Ended</th><th>Charged</th><th>Reason</th></tr>' +
     ss.map(s => `<tr><td>${esc(s.person)}</td><td>${esc(s.machine)}</td><td>${fmtTime(s.startedAt)}</td>
-      <td>${s.status === 'active' ? '<span class="green">进行中</span>' : fmtTime(s.endedAt)}</td>
+      <td>${s.status === 'active' ? '<span class="green">active</span>' : fmtTime(s.endedAt)}</td>
       <td>${fmtSec(s.chargedSeconds)}</td><td class="muted">${esc(s.endReason || '-')}</td></tr>`).join('');
 }
 
-// ---------- 启动 ----------
+// ---------- boot ----------
 $('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 if (token) { refreshAll(); } else { showLogin(); }
 pollTimer = setInterval(() => {

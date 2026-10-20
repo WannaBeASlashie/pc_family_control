@@ -76,7 +76,7 @@ public class PipeServerService : BackgroundService
             catch (IOException) { }
             catch (Exception ex)
             {
-                _log.LogWarning(ex, "管道连接异常");
+                _log.LogWarning(ex, "Pipe connection error");
             }
             finally
             {
@@ -123,12 +123,12 @@ public class PipeServerService : BackgroundService
                         }
                     }
                     finally { _gate.Sem.Release(); }
-                    _log.LogInformation("UI 断开超过 {Sec}s 且会话活跃，会话已自动结束", _watchdogSeconds);
+                    _log.LogInformation("UI gone > {Sec}s with active session - session ended", _watchdogSeconds);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    _log.LogWarning(ex, "看门狗结束会话失败（服务器不可达？），稍后重试");
+                    _log.LogWarning(ex, "Watchdog session end failed (server unreachable?), will retry");
                 }
                 lock (_writeLock) _uiGoneSinceUtc = DateTime.UtcNow; // 重置计时，下轮再查
             }
@@ -187,7 +187,7 @@ public class PipeServerService : BackgroundService
                             _state.AdminLock(false);
                             return Reply(id, true, new { ok = true, person = resp.Person, balanceSeconds = resp.BalanceSeconds });
                         }
-                        return Reply(id, true, new { ok = false, reason = resp?.Reason ?? "服务器无响应" });
+                        return Reply(id, true, new { ok = false, reason = resp?.Reason ?? "Server unavailable" });
                     }
                     finally { _gate.Sem.Release(); }
                 }
@@ -214,7 +214,7 @@ public class PipeServerService : BackgroundService
                 case "requestTime":
                 {
                     if (_offline.IsOfflineMode)
-                        return Reply(id, true, new { ok = false, reason = "离线模式暂不可申请加时" });
+                        return Reply(id, true, new { ok = false, reason = "Time requests unavailable offline" });
 
                     var minutes = root.TryGetProperty("minutes", out var m) && m.ValueKind == JsonValueKind.Number
                         ? m.GetInt32() : 15;
@@ -222,13 +222,13 @@ public class PipeServerService : BackgroundService
                     try
                     {
                         var resp = await _api.PostAsync<RequestResp>("/api/client/request", new { minutes });
-                        return Reply(id, true, new { ok = resp is not null && resp.Ok, reason = resp?.Reason ?? "服务器无响应" });
+                        return Reply(id, true, new { ok = resp is not null && resp.Ok, reason = resp?.Reason ?? "Server unavailable" });
                     }
                     finally { _gate.Sem.Release(); }
                 }
 
                 default:
-                    return Reply(id, false, new { reason = "未知命令" });
+                    return Reply(id, false, new { reason = "Unknown command" });
             }
         }
         catch (Exception ex)

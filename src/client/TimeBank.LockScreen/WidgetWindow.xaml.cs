@@ -56,7 +56,7 @@ public partial class WidgetWindow : Window
 
         CheckReminders(st.BalanceSeconds);
         _balance = st.BalanceSeconds;
-        NameText.Text = (st.Offline ? "[离线] " : "") + (st.PersonName ?? "—");
+        NameText.Text = (st.Offline ? "[Offline] " : "") + (st.PersonName ?? "—");
         UpdateTime();
     }
 
@@ -74,7 +74,7 @@ public partial class WidgetWindow : Window
             if (_lastBalance >= t && newBalance < t)
             {
                 var minutes = t / 60;
-                new ToastWindow($"⏰ 剩余时间不足 {minutes} 分钟，请注意保存").Show();
+                new ToastWindow($"Less than {minutes} min remaining").Show();
                 break;
             }
         }

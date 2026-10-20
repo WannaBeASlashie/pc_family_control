@@ -1,4 +1,4 @@
-# willBeyond TimeBank（时光银行）— 完整文档
+# willBeyond TimeBank — Documentation
 
 > 版本：v1.2（P1 完成 + 滑动窗口限额）｜ 更新：2026-10-20
 > 本文档是项目的唯一权威参考，整合需求、设计、实现与部署。历史演进细节见 `requirements.md` / `design.md`。

@@ -163,7 +163,7 @@ public class PipeClient
     public async Task<(bool Ok, string? Reason)> LoginAsync(string cardNo, string pin)
     {
         var r = await CallAsync("login", new Dictionary<string, object?> { ["cardNo"] = cardNo, ["pin"] = pin });
-        if (r is null) return (false, "无法连接本机服务，请稍候再试");
+        if (r is null) return (false, "Cannot reach local agent, try again shortly");
 
         var root = r.Value;
         var ok = root.TryGetProperty("data", out var d)
@@ -183,7 +183,7 @@ public class PipeClient
     public async Task<(bool Ok, string? Reason)> RequestTimeAsync(int minutes)
     {
         var r = await CallAsync("requestTime", new Dictionary<string, object?> { ["minutes"] = minutes });
-        if (r is null) return (false, "无法连接本机服务，请稍候再试");
+        if (r is null) return (false, "Cannot reach local agent, try again shortly");
 
         var root = r.Value;
         var ok = root.TryGetProperty("data", out var d)
